@@ -184,7 +184,7 @@ with tab2:
 
     st.info(
         """
-        2025 онд нийт давхардаагүй тоогоор **3,102**, давхардсан тоогоор **9,466** хэрэглэгч 1000 оноо давсан байна.
+        2025 онд нийт давхардаагүй тоогоор **2,516**, давхардсан тоогоор **8,424** хэрэглэгч 1000 оноо давсан байна.
     """)
 
 
@@ -407,6 +407,13 @@ with tab4:
 
 with tab5:
     st.markdown("## Хөнгөлөлттэй Ардын Эрх")
+    data = {
+        "RDX reached": ["500 RDX", "600 RDX", "700 RDX", "800 RDX", "900 RDX", "1000 RDX"],
+        "Discount": ["50%", "60%", "70%", "80%", "90%", "100%"],
+        "ARDX received": ["250 ARDX", "360 ARDX", "490 ARDX", "640 ARDX", "810 ARDX", "1000 ARDX"]
+    }
+
+    df_table = pd.DataFrame(data)
 
     monthly_customer_points = (
     df.groupby(
@@ -547,6 +554,11 @@ with tab5:
         margin=dict(t=80, b=20, l=50, r=20),
         yaxis=dict(showgrid=True, gridcolor='#F0F0F0', zeroline=False)
     )
+
+    with st.expander(expanded=False,label='Хөнгөлөлтийн шатлал'):
+        st.subheader("Хөнгөлөлтийн шатлал")
+
+        st.table(df_table)
 
     st.divider()
     # Streamlit Layout

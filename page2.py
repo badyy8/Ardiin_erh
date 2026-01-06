@@ -102,7 +102,7 @@ with tab2:
 
     # Scatter Plot
     transaction_summary = df.groupby(['LOYAL_CODE', 'MONTH_NAME','MONTH_NUM', 'CODE_GROUP']).agg({
-        'JRNO': 'count',
+        'JRNO': 'size',
         'CUST_CODE' : 'nunique',
         'TXN_AMOUNT':'sum'
     }).reset_index()
@@ -465,7 +465,7 @@ with tab4:
     with st.expander(expanded=False, label='Тайлбар:'):
         st.markdown(f"""
             #### Гүйлгээний шинжилгээ
-            -	2025 онд **Топ 5** гүйлгээний төрөл нийлээд **65.3%** буюу нийт онооны талаас их хувийг бүрдүүлж байна.
+            -	2025 онд **Топ 5** гүйлгээний төрөл нийлээд **65.5%** буюу нийт онооны талаас их хувийг бүрдүүлж байна.
             -	Бүх гүйлгээний төрлүүдийн **10%** (9/84) нь нийт онооны **80%** ийг бүрдүүлж байна.
                     
             #### 1к эрхийн гүйлгээний урамшуулал:  
