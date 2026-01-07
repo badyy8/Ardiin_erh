@@ -151,7 +151,7 @@ with tab1:
         secondary_y=True
     )
 
-    fig.add_hline(y=2234354, 
+    fig.add_hline(y=2526892, 
                 line_dash="dash", 
                 line_color="red",
                 line_width = 2, 
@@ -159,7 +159,7 @@ with tab1:
                 opacity=0.5
     )
 
-    fig.add_hline(y=28, 
+    fig.add_hline(y=29, 
                 line_dash="dash", 
                 line_color="blue",
                 line_width = 2, 
@@ -242,7 +242,7 @@ with tab1:
 
 with tab2:
 
-    with st.expander(label='Шинэ Хэрэглэгчийн Шинжилгээ:', expanded=False):
+    with st.expander(label='Шинэ Хэрэглэгчийн Шинжилгээ:', expanded=True):
         col1,col2 = st.columns([0.6,0.4])
         with col1:
             df['IS_NEW_USER'] = df.groupby('CUST_CODE')['MONTH_NUM'].transform('min') == df['MONTH_NUM']
@@ -316,7 +316,13 @@ with tab2:
             fig.update_xaxes(
                     title_text="Сар",
                 )
-            
+            fig.update_layout(legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            ))
             st.plotly_chart(fig, use_container_width=True)
 
         with col2:
@@ -326,11 +332,11 @@ with tab2:
             """)
             st.info("""
                     - 7,8-р сарын уналтын 1 шалтаан нь шинэ хэрэглэгчдийн тоо багассантай холбоотой байна. 
-                    - Энэ сарууд шинэ хэрэглэгчдийн сарын дундаж онооноос **(154,926 - 160,097)** -р бага оноо цуглуулсан байна.""" )
+                    - Энэ сарууд шинэ хэрэглэгчдийн сарын дундаж онооноос **(184,389 - 194,389)** -р бага оноо цуглуулсан байна.""" )
             
     st.divider()        
 
-    with st.expander(label = 'Урамшууллын бүлэг:', expanded=False):
+    with st.expander(label = 'Урамшууллын бүлэг:', expanded=True):
         code_group_acc_insur_df = df[df['CODE_GROUP'].isin(['Insurance','Investments & Securities','Account Opening'])].groupby(['MONTH_NUM', 'CODE_GROUP']).agg({
             'JRNO': 'count',
             'TXN_AMOUNT': 'sum',

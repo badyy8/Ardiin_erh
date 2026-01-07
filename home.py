@@ -24,7 +24,7 @@ with st.expander('Датасетийн ерөнхий мэдээлэл', expande
     
     st.subheader('Датасетийн бүтэц')
     col1, col2, col3 = st.columns(3)
-    col1.metric(f"Нийт мөрийн тоо", "2,480,960")
+    col1.metric(f"Нийт мөрийн тоо", "2,484,682")
     col2.metric("Баганы тоо", "9")
     col3.metric("Эх сурвалж", "Системийн лог")
 
@@ -52,7 +52,7 @@ with st.expander('Датасетийн ерөнхий мэдээлэл', expande
         
         st.info("**LOYAL_CODE**")
         st.write(f"* **Өвөрмөц код:** {df.LOYAL_CODE.nunique()}")
-        st.write(f"* **Түгээмэл:** 10K_TRANSACTION (1,669,253)")
+        st.write(f"* **Түгээмэл:** 10K_TRANSACTION {len(df[df['LOYAL_CODE'] == '10K_TRANSACTION']):,}")
 
     with analysis_col2:
         st.info("**CUST_CODE & DATE**")
@@ -67,10 +67,10 @@ with st.expander('Датасетийн ерөнхий мэдээлэл', expande
 # 3. Data Quality
 with st.expander('3. Өгөгдлийн чанарын үнэлгээ', expanded=False):
     st.warning("Датасет дээр хийгдсэн цэвэрлэгээ")
-    st.markdown("""
+    st.markdown(f"""
     * **TXN_DESC:** Зарим тайлбарын багана давхардсан болон стандарт бус тексттэй байсныг зассан.
     * **Cleaning:** Зарим утгуудыг системд оруулахад бэлтгэж цэвэрлэсэн.
-    * **Missing Values:** **3,722** мөр `LOYAL_CODE`-гүй байсан.
+    * **Missing Values:** **{len(df[df['LOYAL_CODE'] == 'None'])}** мөр `LOYAL_CODE`-гүй байсан.
     * **Anomaly:** 
         -   Даатгал болон Данс нээгдсний гүйлгээний оноо **7-р сарын 2** ноос хойш байхгүй болсон.
         -   **3** гүйлгээ бутархай дүнтэй байсан.

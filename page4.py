@@ -105,20 +105,20 @@ with tab1:
 
     with col1:
         st.subheader("Гүйлгээ")
-        st.metric("Low (Q25)", f"{txn_q25:.1f} гүйлгээ")
-        st.metric("High (Q75)", f"{txn_q75:.1f} гүйлгээ")
+        st.metric("Low (Q25)", f"{txn_q25:.0f} гүйлгээ")
+        st.metric("High (Q75)", f"{txn_q75:.0f} гүйлгээ")
         st.caption("Амжилттай хэрэглэгчдийн босго:")
-        st.metric("Амжилтийн босго", f"{achievers_txn_q25:.1f} гүйлгээ", help="Bottom 25% of successful users")
+        st.metric("Амжилтийн босго", f"{achievers_txn_q25:.0f} гүйлгээ", help="Bottom 25% of successful users")
 
     with col2:
         st.subheader("Өдөр")
-        st.metric("Low (Q25)", f"{days_q25:.1f} өдөр")
-        st.metric("High (Q75)", f"{days_q75:.1f} өдөр")
+        st.metric("Low (Q25)", f"{days_q25:.0f} өдөр")
+        st.metric("High (Q75)", f"{days_q75:.0f} өдөр")
 
     with col3:
         st.subheader("Нийт оноо")
-        st.metric("Low (Q25)", f"{points_q25:.1f}")
-        st.metric("High (Q75)", f"{points_q75:.1f}")
+        st.metric("Low (Q25)", f"{points_q25:.0f}")
+        st.metric("High (Q75)", f"{points_q75:.0f}")
 
     st.header("Segment Definition Logic")
 
@@ -127,9 +127,9 @@ with tab1:
         "Шалгуур үзүүлэлтүүд": [
             "Inactive Flag = 1",
             "Points >= 1000",
-            f"Transactions >= {achievers_txn_q25:.1f}",
-            f"Transactions < {txn_q75:.1f} & Days <= {days_q75:.1f}",
-            f"Transactions >= {txn_q75:.1f} & Days > {days_q75:.1f}",
+            f"Transactions >= {achievers_txn_q25:.0f}",
+            f"Transactions < {txn_q75:.0f} & Days <= {days_q75:.0f}",
+            f"Transactions >= {txn_q75:.0f} & Days > {days_q75:.0f}",
             "Fall-through category"
         ],
         "Утга": [
@@ -280,21 +280,22 @@ with tab2:
     with col2:
         mve_data = {
             "Үзүүлэлт": ["Гүйлгээний тоо", "Идэвхтэй хоног", "Нийт оноо"],
-            "Дүн": [59, 5, 1000],
-            "Утга": ["Хамгийн бага идэвхтэй хэрэглэгчид дунджаар ~59 гүйлгээ хийсэн", "Тэд хамгийн багадаа 5 өөр өдөр идэвхтэй байсан", "Босго оноог арай ядан давсан"]
+            "Дүн": [58, 5, 1000],
+            "Утга": ["Хамгийн бага идэвхтэй хэрэглэгчид дунджаар ~58 гүйлгээ хийсэн", "Тэд хамгийн багадаа 5 өөр өдөр идэвхтэй байсан", "Босго оноог арай ядан давсан"]
         }
-        st.table(pd.DataFrame(mve_data))
+        st.dataframe(pd.DataFrame(mve_data), hide_index=True, use_container_width=True)
+
 
     st.markdown("""
     **Дүгнэлт:**
-    **~59-оос бага** гүйлгээ хийсэн эсвэл **~5-аас цөөн** өдөр идэвхтэй байсан хэрэглэгч 1000 оноонд хүрэх магадлал маш бага байна.
+    **~58-оос бага** гүйлгээ хийсэн эсвэл **~5-аас цөөн** өдөр идэвхтэй байсан хэрэглэгч 1000 оноонд хүрэх магадлал маш бага.
     """)
 
     st.markdown("---")
 
     st.header("4. Дундаж амжилттай хэрэглэгчийн зан төлөв (50%)")
     m1, m2, m3 = st.columns(3)
-    m1.metric("Гүйлгээний тоо", "107")
+    m1.metric("Гүйлгээний тоо", "106")
     m2.metric("Идэвхтэй хоног", "10")
     m3.metric("Нийт оноо", "1,005")
 
@@ -307,7 +308,7 @@ with tab2:
     st.header("5. Өндөр идэвхтэй хэрэглэгчид (75%)")
     strong_data = {
         "Үзүүлэлт": ["Гүйлгээний тоо", "Идэвхтэй хоног"],
-        "75 дахь перцентиль": [158, 19]
+        "75 дахь перцентиль": [156, 20]
     }
     st.dataframe(pd.DataFrame(strong_data), use_container_width=True,hide_index=True)
 
@@ -361,9 +362,10 @@ with tab3:
         xaxis=dict(showgrid=True, gridcolor="#E5E7EB", zeroline=False),
         yaxis=dict(showgrid=True, gridcolor="#E5E7EB", zeroline=False),
         # Font styling
-        font=dict(family="Arial", size=14, color="#374151")
-    )
+        font=dict(family="Arial", size=14, color="#374151"),
+    #    yaxis=dict(automargin=True),
 
+    )
     st.plotly_chart(fig, use_container_width=True)
 
     st.caption('Inactive болон 1000 оноо давсан хэрэглэгчдээс бусад сегмэнтийн тархалтыг харуулав')

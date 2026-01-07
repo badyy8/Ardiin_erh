@@ -159,6 +159,9 @@ with tab1:
             y = 'Segments', 
             selected_month=selected_month
     )
+    # fig.update_layout(
+    #     yaxis=dict(automargin=True),
+    # )
     st.plotly_chart(fig)
 
 
@@ -168,6 +171,7 @@ with tab2:
     user_milestone_counts = user_milestone_counts.sort_values(by='Times_Reached_1000', ascending=False)
 
     reach_frequency = user_milestone_counts.groupby('Times_Reached_1000')['CUST_CODE'].size().reset_index(name='Number_of_Users')
+    reach_frequency['Total'] = reach_frequency['Times_Reached_1000']*reach_frequency['Number_of_Users']
     fig = px.bar(
         reach_frequency,
         x='Times_Reached_1000',
@@ -178,13 +182,14 @@ with tab2:
         template="plotly_white"
     )
 
-    fig.update_traces(textposition='outside')
+    fig.update_traces(textposition='outside', cliponaxis=False )
     fig.update_xaxes(tickmode='linear')   
+
     st.plotly_chart(fig,use_container_width=True)
 
     st.info(
-        """
-        2025 онд нийт давхардаагүй тоогоор **2,780**, давхардсан тоогоор **9,058** хэрэглэгч 1000 оноо давсан байна.
+        f"""
+        2025 онд нийт давхардаагүй тоогоор **{reach_frequency['Number_of_Users'].sum():,}**, давхардсан тоогоор **{reach_frequency['Total'].sum():,}** хэрэглэгч 1000 оноо давсан байна.
     """)
 
 
@@ -208,6 +213,7 @@ with tab3:
         total_loyal_df['True_Monthly_Total'] >= 1000
     ].copy()
     final_df = final_df[final_df['LOYAL_CODE'] != '10K_PURCH_INSUR']
+    final_df = final_df[final_df['LOYAL_CODE'] != 'None']
 
 
     final_df['Normalized_Points'] = (
@@ -256,7 +262,7 @@ with tab3:
     avg_user_simple = pd.concat([
         main,
         pd.DataFrame([{
-            'DESC': 'Бусад үйлдлүүд',
+            'DESC': 'Бусад Урамшууллууд',
             'Normalized_Points': other_sum
         }])
     ])
