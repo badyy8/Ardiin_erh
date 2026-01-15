@@ -6,7 +6,11 @@ import plotly.express as px
 import pandas as pd
 import math
 
-df = load_data()
+@st.cache_data(show_spinner=False)
+def load_base():
+    return load_data(), get_lookup()
+
+df, loyal_code_to_desc = load_base()
 
 tab1, tab2, tab3, tab4 = st.tabs(["Methodology", "ГҮЙЛГЭЭНИЙ ОНООНЫ ТАРХАЦ", 'ГҮЙЛГЭЭНИЙ ТӨРЛИЙН ШИНЖИЛГЭЭ (БҮЛЭГЛЭСЭН)', 'ГҮЙЛГЭЭНИЙ ШИНЖИЛГЭЭ'])
 month_order = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 
@@ -14,10 +18,50 @@ month_order = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
 
 
 # Total Points by Reward group
+@st.cache_data(show_spinner=False)
 def get_grouped_reward():
     grouped_reward = df.groupby(['CODE_GROUP','MONTH_NUM', 'MONTH_NAME'])['TXN_AMOUNT'].sum().reset_index()
     grouped_reward.rename(columns = {'TXN_AMOUNT': 'TOTAL_AMOUNT'}, inplace=True)
     return grouped_reward
+
+
+@st.cache_data(show_spinner=False)
+def build_transaction_summary(df, lookup):
+    ts = (
+        df.groupby(
+            ['LOYAL_CODE', 'MONTH_NAME', 'MONTH_NUM', 'CODE_GROUP'],
+            observed=True
+        )
+        .agg(
+            Transaction_Freq=('JRNO', 'size'),
+            Total_Users=('CUST_CODE', 'nunique'),
+            Total_Amount=('TXN_AMOUNT', 'sum')
+        )
+        .reset_index()
+    )
+    ts['DESC'] = ts['LOYAL_CODE'].map(lookup)
+    return ts
+
+@st.cache_data(show_spinner=False)
+def build_animation_fig(transaction_summary):
+    fig = px.scatter(
+        transaction_summary,
+        x='Total_Users',
+        y='Total_Amount',
+        size='Transaction_Freq',
+        color='GROUP',
+        animation_frame='MONTH_NAME',
+        animation_group='LOYAL_CODE',
+        log_x=True,
+        log_y=True,
+        size_max=55,
+        category_orders={'MONTH_NAME': month_order},
+        color_discrete_sequence=px.colors.qualitative.Vivid,
+    )
+    return fig
+
+
+transaction_summary = build_transaction_summary(df, loyal_code_to_desc)
 
 grouped_reward = get_grouped_reward()
 
@@ -98,18 +142,8 @@ with tab1:
         st.dataframe(df.groupby('CODE_GROUP')['LOYAL_CODE'].unique(), use_container_width=True)
     
 with tab2:
-    loyal_code_to_desc = get_lookup()
 
-    # Scatter Plot
-    transaction_summary = df.groupby(['LOYAL_CODE', 'MONTH_NAME','MONTH_NUM', 'CODE_GROUP']).agg({
-        'JRNO': 'size',
-        'CUST_CODE' : 'nunique',
-        'TXN_AMOUNT':'sum'
-    }).reset_index()
-
-
-    transaction_summary.columns = ['LOYAL_CODE', 'MONTH_NAME', 'MONTH_NUM','GROUP','Transaction_Freq','Total_Users', 'Total_Amount']
-    transaction_summary['DESC'] = transaction_summary['LOYAL_CODE'].map(loyal_code_to_desc)
+    transaction_summary.columns = ['LOYAL_CODE', 'MONTH_NAME', 'MONTH_NUM','GROUP','Transaction_Freq','Total_Users', 'Total_Amount', 'DESC']
 
     significant_movers = [
         '10K_TRANSACTION_CARD',
@@ -121,20 +155,7 @@ with tab2:
     transaction_summary['MOVERS'] = transaction_summary['LOYAL_CODE'].isin(significant_movers)
     movers_df = transaction_summary[transaction_summary['MOVERS'] == True]
 
-    fig = px.scatter(transaction_summary, 
-            x = 'Total_Users', 
-            y = 'Total_Amount', 
-            size = 'Transaction_Freq',
-            size_max = 55, 
-            hover_name='DESC',
-            color = 'GROUP',
-            log_y=True,
-            log_x=True,
-            animation_frame='MONTH_NAME',
-            category_orders={'MONTH_NAME': month_order},
-            animation_group='LOYAL_CODE',
-            color_discrete_sequence=px.colors.qualitative.Vivid,
-    )
+    fig = build_animation_fig(transaction_summary)
     fig.update_traces(
         marker=dict(
             line=dict(width=1, color='white'),
@@ -323,7 +344,7 @@ with tab2:
 
 with tab3:
   
-    line_chart_df = grouped_reward.groupby(['CODE_GROUP','MONTH_NUM'])['TOTAL_AMOUNT'].sum().reset_index()
+    line_chart_df = grouped_reward[['CODE_GROUP', 'MONTH_NUM', 'TOTAL_AMOUNT']]
     line_chart_df = line_chart_df.sort_values('MONTH_NUM')
 
     line_chart_fig = px.line(line_chart_df, 

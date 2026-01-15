@@ -5,9 +5,12 @@ import plotly.express as px
 import pandas as pd
 from plotly.subplots import make_subplots
 
-df = load_data()
+@st.cache_data(show_spinner=False)
+def load_base():
+    return load_data(), get_lookup()
 
-loyal_code_to_desc = get_lookup()
+df, loyal_code_to_desc = load_base()
+
 
 @st.cache_data(show_spinner=False)
 def get_user_df():
@@ -125,7 +128,7 @@ with tab1:
     logic_data = {
         "Сегмэнт": ["Inactive", "Achiever", "High Effort", "Explorer", "Consistent", "Irregular"],
         "Шалгуур үзүүлэлтүүд": [
-            "Inactive Flag = 1",
+            "Transaction per Month == 1",
             "Points >= 1000",
             f"Transactions >= {achievers_txn_q25:.0f}",
             f"Transactions < {txn_q75:.0f} & Days <= {days_q75:.0f}",

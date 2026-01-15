@@ -7,7 +7,11 @@ import pandas as pd
 from plotly.subplots import make_subplots
 
 
-df = load_data()
+@st.cache_data(show_spinner=False)
+def load_base():
+    return load_data()
+
+df = load_base()
 
 st.header('ОНЦЛОХ САРЫН ШИНЖИЛГЭЭ', anchor='center')
 
@@ -195,6 +199,7 @@ with tab1:
         loyal_codes_45_only = loyal_code_months[loyal_code_months.apply(lambda months: all(m in target_months for m in months))]
 
         loyal_codes_45_only_list = loyal_codes_45_only.index.tolist()
+        #loyal_codes_45_only_list = loyal_codes_only_in_months(df, [4, 5])
         loyal_codes_45_only = {'LOYAL_CODES' : loyal_codes_45_only_list}
         loyal_codes_45_only = pd.DataFrame({'LOYAL_CODES': [loyal_codes_45_only_list]})
         st.dataframe(loyal_codes_45_only,use_container_width=True,hide_index=True)
@@ -245,11 +250,16 @@ with tab2:
     with st.expander(label='Шинэ Хэрэглэгчийн Шинжилгээ:', expanded=True):
         col1,col2 = st.columns([0.6,0.4])
         with col1:
-            df['IS_NEW_USER'] = df.groupby('CUST_CODE')['MONTH_NUM'].transform('min') == df['MONTH_NUM']
-            new_user_df = df.groupby('MONTH_NUM')['IS_NEW_USER'].sum().reset_index()
+            user_first_month = df.groupby('CUST_CODE')['MONTH_NUM'].min().reset_index()
+            cust_point_monthly = df.groupby(['CUST_CODE', 'MONTH_NUM'])['TXN_AMOUNT'].sum().reset_index()
+            new_user_df = pd.merge(left=user_first_month, right=cust_point_monthly, on=['CUST_CODE','MONTH_NUM'],how='left')
+            new_user_df = new_user_df.groupby('MONTH_NUM').agg({
+                'CUST_CODE': 'nunique',
+                'TXN_AMOUNT':'sum'
+            }).reset_index()
             new_user_df = new_user_df[new_user_df['MONTH_NUM'] > 1]
-            new_user_spend = df[df['IS_NEW_USER'] == True].groupby('MONTH_NUM')['TXN_AMOUNT'].sum().reset_index()
-            new_user_df = pd.merge(left=new_user_df, right=new_user_spend, on='MONTH_NUM')
+
+
 
             fig = make_subplots(
                     specs=[[{"secondary_y": True}]]
@@ -275,7 +285,7 @@ with tab2:
             fig.add_trace(
                 go.Scatter(
                     x = new_user_df['MONTH_NUM'],
-                    y= new_user_df['IS_NEW_USER'],
+                    y= new_user_df['CUST_CODE'],
                     name = 'Шинэ Хэрэглэгчдийн Тоо'
                     #labels={'MONTH_NUM': 'Сар' , 'IS_NEW_USER': 'Шинэ Хэрэглэгчдийн тоо'}
 

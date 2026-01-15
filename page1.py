@@ -111,7 +111,12 @@ def bar_plot_h(df, x, y, selected_month):
     return fig
 
 # Data Load 
-df = load_data()
+@st.cache_data(show_spinner=False)
+def load_base():
+    return load_data()
+
+df = load_base()
+
 monthly_customer_points = get_monthly_customer_points(df)
 cust_freq = get_freq(df)
 reached_1000_df = get_reached_1000_df(monthly_customer_points)

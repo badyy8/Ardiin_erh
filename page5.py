@@ -5,20 +5,23 @@ import plotly.express as px
 import pandas as pd
 from plotly.subplots import make_subplots
 
-df = load_data()
+@st.cache_data(show_spinner=False)
+def load_base_data():
+    df = load_data()
+    lookup = get_lookup()
+    return df, lookup
 
-loyal_code_to_desc = get_lookup()
+df, loyal_code_to_desc = load_base_data()
 
 @st.cache_data(show_spinner=False)
 def get_user_df():
     users_agg_df = (
-        df.groupby(['CUST_CODE', 'MONTH_NUM'])
+        df.groupby(['CUST_CODE', 'MONTH_NUM'],observed=True)
         .agg(
             Total_Points=('TXN_AMOUNT', 'sum'),
             Transaction_Count=('JRNO', 'count'),
             Unique_Loyal_Codes=('LOYAL_CODE', 'nunique'),
             Active_Days=('TXN_DATE', 'nunique'),
-            Dominant_Code_Group=('CODE_GROUP', lambda x: x.mode().iloc[0])
         )
         .reset_index()
     )
@@ -28,6 +31,21 @@ def get_user_df():
     ).astype(int)
 
     return users_agg_df
+
+@st.cache_data(show_spinner=False)
+def get_monthly_customer_points(df):
+    out = (
+        df.groupby(
+            ['MONTH_NUM', 'MONTH_NAME', 'CUST_CODE'],
+            observed=True
+        )['TXN_AMOUNT']
+        .sum()
+        .reset_index(name='Total_Points')
+    )
+    return out
+
+monthly_customer_points = get_monthly_customer_points(df)
+
 
 users_agg_df = get_user_df()
 users_agg_df['Inactive'] = (users_agg_df['Transaction_Count'] <= 1).astype(int)
@@ -117,17 +135,6 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs(['Ардын Эрх Сараар',"1000 �
 
 with tab1:
 
-
-    monthly_customer_points = (
-            df.groupby(
-                ['MONTH_NUM', 'MONTH_NAME', 'CUST_CODE'],
-                observed=True
-            )['TXN_AMOUNT']
-            .sum()
-            .reset_index()
-        )
-    monthly_customer_points.rename(columns={'TXN_AMOUNT' : 'Total_Points'}, inplace=True)
-
     months = (
         monthly_customer_points
         .sort_values('MONTH_NUM')
@@ -195,12 +202,12 @@ with tab2:
 
 with tab3:
     monthly_totals = (
-        df.groupby(['CUST_CODE', 'MONTH_NUM'])['TXN_AMOUNT']
+        df.groupby(['CUST_CODE', 'MONTH_NUM'],observed=True)['TXN_AMOUNT']
         .sum()
         .reset_index(name='True_Monthly_Total')
     )
 
-    loyal_code_agg = df.groupby(['CUST_CODE', 'LOYAL_CODE', 'MONTH_NUM'])['TXN_AMOUNT'].sum().reset_index()
+    loyal_code_agg = df.groupby(['CUST_CODE', 'LOYAL_CODE', 'MONTH_NUM'],observed=True)['TXN_AMOUNT'].sum().reset_index()
     segment_map = users_agg_df[['CUST_CODE', 'MONTH_NUM', 'User_Segment']]
 
     total_loyal_df = (
@@ -223,7 +230,7 @@ with tab3:
 
     user_month_profile = (
     final_df
-        .groupby(['CUST_CODE', 'MONTH_NUM', 'LOYAL_CODE'])['Normalized_Points']
+        .groupby(['CUST_CODE', 'MONTH_NUM', 'LOYAL_CODE'],observed=True)['Normalized_Points']
         .sum()
         .reset_index()
     )
@@ -297,7 +304,7 @@ with tab3:
 
     share_users = (
         final_df
-        .groupby(['CUST_CODE', 'MONTH_NUM'])['LOYAL_CODE']
+        .groupby(['CUST_CODE', 'MONTH_NUM'],observed=True)['LOYAL_CODE']
         .apply(lambda x: top_code in x.values)
         .mean()
     ) * 100
@@ -305,13 +312,13 @@ with tab3:
 
     conditional_avg = (
         final_df[final_df['LOYAL_CODE'] == top_code]
-            .groupby(['CUST_CODE', 'MONTH_NUM'])['Normalized_Points']
+            .groupby(['CUST_CODE', 'MONTH_NUM'],observed=True)['Normalized_Points']
             .sum()
             .mean()
     )
     avg_loyal_share = (
         final_df
-        .groupby(['CUST_CODE', 'MONTH_NUM'])['Normalized_Points']
+        .groupby(['CUST_CODE', 'MONTH_NUM'],observed=True)['Normalized_Points']
         .sum()
         .mean()
     )
