@@ -1,8 +1,5 @@
 import streamlit as st
-from data_loader import (
-    load_data, get_lookup,
-    get_page5_bundle,   get_page5_loyal_normalized_profile
-)
+from data_loader import load_data, get_lookup
 import plotly.graph_objects as go
 import plotly.express as px
 import pandas as pd
@@ -16,121 +13,327 @@ def load_base_data():
 
 df, loyal_code_to_desc = load_base_data()
 
-available_years = sorted(df["year"].dropna().unique())
+@st.cache_data(show_spinner=False)
+def get_user_df():
+    users_agg_df = (
+        df.groupby(['CUST_CODE', 'MONTH_NUM'],observed=True)
+        .agg(
+            Total_Points=('TXN_AMOUNT', 'sum'),
+            Transaction_Count=('JRNO', 'count'),
+            Unique_Loyal_Codes=('LOYAL_CODE', 'nunique'),
+            Active_Days=('TXN_DATE', 'nunique'),
+        )
+        .reset_index()
+    )
 
-selected_year = st.sidebar.selectbox(
-    "Жил сонгох",
-    available_years,
-    index=len(available_years) - 1
-)
+    users_agg_df['Reached_1000_Flag'] = (
+        users_agg_df['Total_Points'] >= 1000
+    ).astype(int)
 
-st.sidebar.caption(f"Одоогийн сонголт: {selected_year}")
+    return users_agg_df
 
-bundle = get_page5_bundle(df, selected_year)
+@st.cache_data(show_spinner=False)
+def get_monthly_customer_points(df):
+    out = (
+        df.groupby(
+            ['MONTH_NUM', 'MONTH_NAME', 'CUST_CODE'],
+            observed=True
+        )['TXN_AMOUNT']
+        .sum()
+        .reset_index(name='Total_Points')
+    )
+    return out
 
-df_year = bundle["df_year"]
-monthly_customer_points = bundle["monthly_customer_points"]
-users_agg_df = bundle["users_agg_df"]
-thresholds = bundle["thresholds"]
-reach_frequency = bundle["reach_frequency"]
-user_month_profile = bundle["user_month_profile"]
+monthly_customer_points = get_monthly_customer_points(df)
 
-tab3, tab4, tab5 = st.tabs([
-    "1000 Хүрсэн Хэрэглэгчдийн Онооны Тархалт",
-    "Зардал/Борлуулалт",
-    "RDX Хөнгөлөлт",
-])
+
+users_agg_df = get_user_df()
+users_agg_df['Inactive'] = (users_agg_df['Transaction_Count'] <= 1).astype(int)
+user_under_1000_agg = users_agg_df[(users_agg_df['Reached_1000_Flag'] == 0 ) & (users_agg_df['Inactive'] == 0)]
+user_reached_1000_agg = users_agg_df[users_agg_df['Reached_1000_Flag'] == 1]
+
+txn_q25 = user_under_1000_agg['Transaction_Count'].quantile(0.25)
+txn_q75 = user_under_1000_agg['Transaction_Count'].quantile(0.75)
+
+days_q25 = user_under_1000_agg['Active_Days'].quantile(0.25)
+days_q75 = user_under_1000_agg['Active_Days'].quantile(0.75)
+
+points_q25 = user_under_1000_agg['Total_Points'].quantile(0.25)
+points_q75 = user_under_1000_agg['Total_Points'].quantile(0.75)
+
+achievers_txn_q25 = user_reached_1000_agg['Transaction_Count'].quantile(0.25)
+def assign_segment(row):
+
+    if row['Inactive'] == 1:
+        return 'Идэвхгүй'
+
+    if row['Reached_1000_Flag'] == 1:
+        return 'Амжилттай'
+
+    if row['Transaction_Count'] >= achievers_txn_q25:
+        return 'Их_чармайлттай'
+
+    if row['Transaction_Count'] < txn_q75 and row['Active_Days'] <= days_q75:
+        return 'Туршигч'
+
+    if row['Transaction_Count'] >= txn_q75 and row['Active_Days'] > days_q75:
+        return 'Тогтвортой'
+    
+    # Everything else
+    return 'Тогтмол_бус_оролцогч'
+
+users_agg_df['User_Segment'] = users_agg_df.apply(assign_segment, axis=1)
+
+
+user_reached_1000_agg = users_agg_df[users_agg_df['Reached_1000_Flag'] == 1]
+
+def bar_plot_h(df, x, y, selected_month):
+    fig = px.bar(
+        df,
+        x=x, 
+        y=y,
+        orientation='h',
+        labels={x: 'Утга', y: 'Ангилал'}, 
+        color=x,
+        text='Percentage',
+        color_continuous_scale='Blues', 
+        template='plotly_white',  
+    )
+
+    fig.update_traces(
+        textposition='outside', 
+        cliponaxis=False,         
+        textfont_size=16,   
+    )
+
+    # Combine layout updates into one block
+    fig.update_layout(
+        height=500,
+        coloraxis_showscale=False,
+        margin=dict(r=100), # Increased margin for larger % labels
+        title=dict(
+            text=f'<b>{selected_month}-р сарын хэрэглэгчдийн онооны хуваарилалт </b>',
+            font=dict(size=24)
+        ),
+        xaxis=dict(
+            title_text="<b>Нийт хэрэглэгчдийн тоо </b>",
+            title_font=dict(size=18),
+            tickfont=dict(size=14)
+        ),
+        yaxis=dict(
+            title_text="<b>Онооны хэсгүүд</b>",
+            title_font=dict(size=18),
+            tickfont=dict(size=14)
+        )
+    )
+
+    return fig
+loyal_code_to_desc = get_lookup()
+
+tab1, tab2, tab3, tab4, tab5 = st.tabs(['Ардын Эрх Сараар',"1000 Хүрсэн Хэрэглэгчдийн Давтамж", "1000 Хүрсэн Хэрэглэгчдийн Онооны Тархалт", 'Зардал/Борлуулалт', 'RDX Хөнгөлөлт'])
+
+
+with tab1:
+
+    months = (
+        monthly_customer_points
+        .sort_values('MONTH_NUM')
+        [['MONTH_NUM', 'MONTH_NAME']]
+        .drop_duplicates()
+    )
+    bins = [0, 100, 200,300,400, 500,600,700,800,900, 1000, monthly_customer_points['Total_Points'].max() + 1]
+    labels = ['0-99','100-199','200-299','300-399','400-499','500-599', '600-699', '700-799','800-899','900-999', '1000+']
+
+    selected_month = st.selectbox(
+    'Шинжилгээ хийх сараа сонгоно уу',
+    options=months['MONTH_NUM'],
+    key='tab2'
+    )
+
+    filtered_df = monthly_customer_points[monthly_customer_points['MONTH_NUM'] == selected_month]
+    segments = pd.cut(filtered_df['Total_Points'], bins=bins, labels=labels, right=False)
+    segment_counts = segments.value_counts().sort_index()
+    segment_counts = segment_counts.to_frame().reset_index()
+    segment_counts.columns = ['Segments', 'Counts']
+
+    total_customers = segment_counts['Counts'].sum()
+    segment_counts['Percentage'] = (segment_counts['Counts'] / total_customers * 100).round(1)
+    segment_counts['Percentage'] = segment_counts['Percentage'].astype(str) + '%'
+
+
+    fig = bar_plot_h(df=segment_counts, 
+            x = 'Counts', 
+            y = 'Segments', 
+            selected_month=selected_month
+    )
+    # fig.update_layout(
+    #     yaxis=dict(automargin=True),
+    # )
+    st.plotly_chart(fig)
+
+
+with tab2:
+    user_milestone_counts = user_reached_1000_agg.groupby('CUST_CODE').size().reset_index(name='Times_Reached_1000')
+
+    user_milestone_counts = user_milestone_counts.sort_values(by='Times_Reached_1000', ascending=False)
+
+    reach_frequency = user_milestone_counts.groupby('Times_Reached_1000')['CUST_CODE'].size().reset_index(name='Number_of_Users')
+    reach_frequency['Total'] = reach_frequency['Times_Reached_1000']*reach_frequency['Number_of_Users']
+    fig = px.bar(
+        reach_frequency,
+        x='Times_Reached_1000',
+        y='Number_of_Users',
+        text='Number_of_Users',
+        title="Давхардаагүй тоогоор хэрэглэгчид хэдэн удаа 1,000 онооны босго давсан бэ?",
+        labels={'Times_Reached_1000': 'Босгонд хүрсэн тоо', 'Number_of_Users': 'Хэрэглэгчийн тоо'},
+        template="plotly_white"
+    )
+
+    fig.update_traces(textposition='outside', cliponaxis=False )
+    fig.update_xaxes(tickmode='linear')   
+
+    st.plotly_chart(fig,use_container_width=True)
+
+    st.info(
+        f"""
+        2025 онд нийт давхардаагүй тоогоор **{reach_frequency['Number_of_Users'].sum():,}**, давхардсан тоогоор **{reach_frequency['Total'].sum():,}** хэрэглэгч 1000 оноо давсан байна.
+    """)
 
 
 with tab3:
-    user_month_profile = get_page5_loyal_normalized_profile(df_year, users_agg_df)
+    monthly_totals = (
+        df.groupby(['CUST_CODE', 'MONTH_NUM'],observed=True)['TXN_AMOUNT']
+        .sum()
+        .reset_index(name='True_Monthly_Total')
+    )
 
+    loyal_code_agg = df.groupby(['CUST_CODE', 'LOYAL_CODE', 'MONTH_NUM'],observed=True)['TXN_AMOUNT'].sum().reset_index()
+    segment_map = users_agg_df[['CUST_CODE', 'MONTH_NUM', 'User_Segment']]
+
+    total_loyal_df = (
+        loyal_code_agg
+        .merge(segment_map, on=['CUST_CODE', 'MONTH_NUM'], how='inner')
+        .merge(monthly_totals, on=['CUST_CODE', 'MONTH_NUM'], how='left')
+    )
+
+    final_df = total_loyal_df[
+        total_loyal_df['True_Monthly_Total'] >= 1000
+    ].copy()
+    final_df = final_df[final_df['LOYAL_CODE'] != '10K_PURCH_INSUR']
+    final_df = final_df[final_df['LOYAL_CODE'] != 'None']
+
+
+    final_df['Normalized_Points'] = (
+        final_df['TXN_AMOUNT'] / final_df['True_Monthly_Total']
+    ) * 1000
+
+
+    user_month_profile = (
+    final_df
+        .groupby(['CUST_CODE', 'MONTH_NUM', 'LOYAL_CODE'],observed=True)['Normalized_Points']
+        .sum()
+        .reset_index()
+    )
     profile_wide = user_month_profile.pivot_table(
-        index=["CUST_CODE", "MONTH_NUM"],
-        columns="LOYAL_CODE",
-        values="Normalized_Points",
+        index=['CUST_CODE', 'MONTH_NUM'],
+        columns='LOYAL_CODE',
+        values='Normalized_Points',
         fill_value=0
     )
 
-    avg_user_points = profile_wide.mean().reset_index()
-    avg_user_points.columns = ["LOYAL_CODE", "Normalized_Points"]
-
-    avg_user_points = avg_user_points.sort_values("Normalized_Points", ascending=False)
-    avg_user_points["Normalized_Points"] = (
-        avg_user_points["Normalized_Points"] / avg_user_points["Normalized_Points"].sum() * 1000
+    avg_user_points = (
+        profile_wide
+        .mean()
+        .reset_index()
     )
 
-    avg_user_points["DESC"] = avg_user_points["LOYAL_CODE"].map(loyal_code_to_desc)
+    avg_user_points.columns = ['LOYAL_CODE', 'Normalized_Points']
+    avg_user_points.Normalized_Points.sum()
+    avg_user_points = avg_user_points.sort_values(
+        'Normalized_Points', ascending=False
+    )        
+    avg_user_points['Normalized_Points'] = (
+        avg_user_points['Normalized_Points']
+        / avg_user_points['Normalized_Points'].sum()
+        * 1000
+    )
 
-    threshold = 50
-    main = avg_user_points.copy()
-    main.loc[main['Normalized_Points'] < threshold, 'DESC'] = 'Бусад урамшуулал'
-    main.loc[main['DESC'].isna(), 'DESC'] = 'Бусад урамшуулал'
+    avg_user_points['DESC'] = avg_user_points['LOYAL_CODE'].map(loyal_code_to_desc)
+    avg_user_points = avg_user_points[avg_user_points['LOYAL_CODE'] != '10K_PURCH_INSUR']
+
+    threshold = 50 # points
+
+    main = avg_user_points[avg_user_points['Normalized_Points'] >= threshold]
     other_sum = avg_user_points[avg_user_points['Normalized_Points'] < threshold]['Normalized_Points'].sum()
 
-    avg_user_simple = (
-        main.groupby('DESC',observed=True)['Normalized_Points']
-        .sum()
-        .reset_index()
-        .sort_values('Normalized_Points', ascending=False)
-    )
-    
+    avg_user_simple = pd.concat([
+        main,
+        pd.DataFrame([{
+            'DESC': 'Бусад Урамшууллууд',
+            'Normalized_Points': other_sum
+        }])
+    ])
+
+
+
     fig = go.Figure()
-    left_name = "1к эрхийн гүйлгээний"
-    right_name = "Бусад урамшуулал"
 
-    # 1) add the left piece FIRST
-    left_df = avg_user_simple[avg_user_simple["DESC"] == left_name]
-    right_df = avg_user_simple[avg_user_simple["DESC"] == right_name]
-
-    middle_df = avg_user_simple[
-        (avg_user_simple["DESC"] != left_name) &
-        (avg_user_simple["DESC"] != right_name)
-    ]
-
-    # 1) LEFT ALWAYS FIRST
-    for _, row in left_df.iterrows():
+    for _, row in avg_user_simple.iterrows():
         fig.add_bar(
-            y=["Дундаж хэрэглэгч = 1000 Оноо"],
-            x=[row["Normalized_Points"]],
-            name=row["DESC"],
-            orientation="h",
-            hovertemplate="%{x:.0f} оноог %{fullData.name}-аас авсан<extra></extra>",
+            y=['Дундаж хэрэглэгч = 1000 Оноо'],
+            x=[row['Normalized_Points']],
+            name=row['DESC'],
+            orientation='h',
+            hovertemplate='%{x:.0f} оноог %{fullData.name}-аас авсан<extra></extra>'
         )
 
-    # 2) MIDDLE
-    for _, row in middle_df.iterrows():
-        fig.add_bar(
-            y=["Дундаж хэрэглэгч = 1000 Оноо"],
-            x=[row["Normalized_Points"]],
-            name=row["DESC"],
-            orientation="h",
-            hovertemplate="%{x:.0f} оноог %{fullData.name}-аас авсан<extra></extra>",
-        )
-
-    # 3) RIGHT ALWAYS LAST
-    for _, row in right_df.iterrows():
-        fig.add_bar(
-            y=["Дундаж хэрэглэгч = 1000 Оноо"],
-            x=[row["Normalized_Points"]],
-            name=row["DESC"],
-            orientation="h",
-            hovertemplate="%{x:.0f} оноог %{fullData.name}-аас авсан<extra></extra>",
-            marker_color="grey"
-        )
-        
     fig.update_layout(
-        barmode="stack",
-        title="Хэрэглэгч дунджаар хэрхэн 1000 оноонд хүрдэг вэ?",
-        xaxis_title="Оноо",
-        yaxis_title="",
-        template="plotly_white",
+        barmode='stack',
+        title='Хэрэглэгч дунджаар хэрхэн 1000 оноонд хүрдэг вэ?',
+        xaxis_title='Оноо',
+        yaxis_title='',
+        template='plotly_white',
         height=350,
-        legend_title_text="урамшууллын төрөл",
+        legend_title_text='Үйлдлийн төрөл'
     )
 
-    st.plotly_chart(fig, use_container_width=True)
-    st.caption("Даатгал авсны урамшууллын оноог оролцуулаагүй болно")
+    st.plotly_chart(fig,use_container_width=True)
+    st.caption('Даатгал авсны урамшууллын оноог оролцуулаагүй болно')
+
+    top_code = avg_user_points.iloc[0]['LOYAL_CODE']
+
+    share_users = (
+        final_df
+        .groupby(['CUST_CODE', 'MONTH_NUM'],observed=True)['LOYAL_CODE']
+        .apply(lambda x: top_code in x.values)
+        .mean()
+    ) * 100
+
+
+    conditional_avg = (
+        final_df[final_df['LOYAL_CODE'] == top_code]
+            .groupby(['CUST_CODE', 'MONTH_NUM'],observed=True)['Normalized_Points']
+            .sum()
+            .mean()
+    )
+    avg_loyal_share = (
+        final_df
+        .groupby(['CUST_CODE', 'MONTH_NUM'],observed=True)['Normalized_Points']
+        .sum()
+        .mean()
+    )
+
+    col1, col2 = st.columns(2)
+
+    col1.metric(
+        "1к эрхийн гүйлгээний урамшууллын оноо",
+        f"{avg_user_points.iloc[0]['Normalized_Points']:.0f} оноо"
+    )
+
+    col2.metric(
+        "Гол урамшууллын ашиглаж буй хэрэглэгчид",
+        f"{share_users:.1f}%"
+    )
 
 
 with tab4:
@@ -169,6 +372,13 @@ with tab4:
         f"{remaining_cost:,.0f} төг"
     )
 
+    # st.markdown("""
+    # **Тайлбар**
+
+    # - Үндсэн гүйлгээний үйлдлээс оноо авсны дараа хэрэглэгчдэд ихэвчлэн  
+    #   **~600 нэмэлт оноо** шаардлагатай болдог
+    # - Эдгээр оноог цуглуулахын тулд **~1.2 сая төгрөгөөр** дансаа цэнэглэх шаардлагатай
+    # """)
 
     st.divider()
 
@@ -218,16 +428,24 @@ with tab5:
 
     df_table = pd.DataFrame(data)
 
-    mcp = monthly_customer_points.rename(columns={"Total_Points": "Total_Points"}).copy()
+    monthly_customer_points = (
+    df.groupby(
+        ['MONTH_NUM', 'MONTH_NAME', 'CUST_CODE'],
+        observed=True
+    )['TXN_AMOUNT']
+    .sum()
+    .reset_index()
+    )
+    monthly_customer_points.rename(columns={'TXN_AMOUNT': 'Total_Points'}, inplace=True)
 
     bins = [0, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 
-            mcp ['Total_Points'].max() + 1]
+            monthly_customer_points['Total_Points'].max() + 1]
     labels = ['0-99', '100-199', '200-299', '300-399', '400-499', '500-599', 
             '600-699', '700-799', '800-899', '900-999', '1000+']
 
     # Create segments for ALL months (not filtered)
-    mcp ['Segments'] = pd.cut(
-        mcp ['Total_Points'], 
+    monthly_customer_points['Segments'] = pd.cut(
+        monthly_customer_points['Total_Points'], 
         bins=bins, 
         labels=labels, 
         right=False
@@ -235,7 +453,7 @@ with tab5:
 
     # Aggregate across all months by counting customers in each segment
     segment_counts = (
-        mcp 
+        monthly_customer_points
         .groupby('Segments', observed=True)
         .size()
         .reset_index(name='Counts')
@@ -282,32 +500,26 @@ with tab5:
     discounted_rate = discounted_success / total_users * 100
     lift = discounted_rate - current_rate
 
-    col1, col2, col3 = st.columns(3,gap='large')
-    
-    with col1:
-        with st.container(border = True):
-            st.metric(
-                "Одоогийн амжилттай хэрэглэгчдийн тоо",
-                f"{current_success:,}",
-                help="≥ 1000 RDX оноотой хэрэглэгчид давтагдсан тоогоор",
-            )
+    col1, col2, col3 = st.columns(3)
 
-    with col2:
-        with st.container(border = True):
-            st.metric(
-            "Хөнгөлөлтийн дараах амжилттай хэрэглэгчдийн тоо",
-            f"{discounted_success:,}",
-            delta=f"+{discounted_success - current_success:,} хэрэглэгч",
-            help="≥ 500 RDX оноотой хэрэглэгчид",   
-        )
+    col1.metric(
+        "Одоогийн амжилттай хэрэглэгчдийн тоо",
+        f"{current_success:,}",
+        help="≥ 1000 RDX оноотой хэрэглэгчид давтагдсан тоогоор"
+    )
 
-    with col3:
-        with st.container(border = True):
-            st.metric(
-                "Амжилтын хувийн өсөлт",
-                f"{discounted_rate:.1f}%",
-                delta=f"+{lift:.1f} %"
-            )
+    col2.metric(
+        "Хөнгөлөлттөй ардын эрхийн амжилттай хэрэглэгчдийн тоо",
+        f"{discounted_success:,}",
+        delta=f"+{discounted_success - current_success:,} хэрэглэгч",
+        help="≥ 500 RDX оноотой хэрэглэгчид"
+    )
+
+    col3.metric(
+        "Амжилтын хувийн өсөлт",
+        f"{discounted_rate:.1f}%",
+        delta=f"+{lift:.1f} %"
+    )
     success_df = pd.DataFrame({
         "Хувилбар": ["Одоогийн (1000 RDX)", "Хөнгөлөлттэй (≥500 RDX)"],
         "Амжилттай хэрэглэгчид": [current_success, discounted_success]

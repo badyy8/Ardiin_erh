@@ -1,5 +1,6 @@
 import streamlit as st
 from data_loader import load_data, get_lookup
+from page1 import bar_plot_h
 import plotly.graph_objects as go
 import plotly.express as px
 import pandas as pd
@@ -11,9 +12,8 @@ def load_base():
     return load_data()
 
 df = load_base()
-df = df[(df.TXN_DATE >= '2025-01-01') & (df.TXN_DATE >= '2025-01-01')]
 
-st.header('ОНЦЛОХ САРЫН ШИНЖИЛГЭЭ 2025 ОН', anchor='center')
+st.header('ОНЦЛОХ САРЫН ШИНЖИЛГЭЭ', anchor='center')
 
 def donut_plot(df, labels_col, values_col, title_text=""):
     fig = go.Figure(data=[go.Pie(
@@ -54,7 +54,7 @@ def donut_plot(df, labels_col, values_col, title_text=""):
 
 monthly_totals = (
     df
-    .groupby('MONTH_NUM', as_index=False,observed=True)['TXN_AMOUNT']
+    .groupby('MONTH_NUM', as_index=False)['TXN_AMOUNT']
     .sum()
 )
 
@@ -69,7 +69,7 @@ barplot_month_df = pd.DataFrame({
 
 monthly_total_code = (
     df
-    .groupby('MONTH_NUM', as_index=False,observed=True)['LOYAL_CODE']
+    .groupby('MONTH_NUM', as_index=False)['LOYAL_CODE']
     .nunique()
 )
 
@@ -194,7 +194,7 @@ with tab1:
 
         target_months = [4, 5]
 
-        loyal_code_months = df.groupby('LOYAL_CODE',observed=True)['MONTH_NUM'].unique()
+        loyal_code_months = df.groupby('LOYAL_CODE')['MONTH_NUM'].unique()
 
         loyal_codes_45_only = loyal_code_months[loyal_code_months.apply(lambda months: all(m in target_months for m in months))]
 
@@ -210,7 +210,7 @@ with tab1:
     """)
     st.divider()
     filtered_month4 = df[df['MONTH_NUM'] == 4]
-    filtered_month4_loyal = filtered_month4.groupby('LOYAL_CODE',observed=True)['TXN_AMOUNT'].sum().sort_values(ascending=False).reset_index()
+    filtered_month4_loyal = filtered_month4.groupby('LOYAL_CODE')['TXN_AMOUNT'].sum().sort_values(ascending=False).reset_index()
     investor_week_amount = filtered_month4_loyal[filtered_month4_loyal['LOYAL_CODE'].str.lower().str.contains('investor')]
 
     investor_week_donut_df = investor_week_amount.nlargest(n=9, columns='TXN_AMOUNT').copy()
@@ -250,10 +250,10 @@ with tab2:
     with st.expander(label='Шинэ Хэрэглэгчийн Шинжилгээ:', expanded=True):
         col1,col2 = st.columns([0.6,0.4])
         with col1:
-            user_first_month = df.groupby('CUST_CODE',observed=True)['MONTH_NUM'].min().reset_index()
-            cust_point_monthly = df.groupby(['CUST_CODE', 'MONTH_NUM'],observed=True)['TXN_AMOUNT'].sum().reset_index()
+            user_first_month = df.groupby('CUST_CODE')['MONTH_NUM'].min().reset_index()
+            cust_point_monthly = df.groupby(['CUST_CODE', 'MONTH_NUM'])['TXN_AMOUNT'].sum().reset_index()
             new_user_df = pd.merge(left=user_first_month, right=cust_point_monthly, on=['CUST_CODE','MONTH_NUM'],how='left')
-            new_user_df = new_user_df.groupby('MONTH_NUM',observed=True).agg({
+            new_user_df = new_user_df.groupby('MONTH_NUM').agg({
                 'CUST_CODE': 'nunique',
                 'TXN_AMOUNT':'sum'
             }).reset_index()
@@ -347,13 +347,13 @@ with tab2:
     st.divider()        
 
     with st.expander(label = 'Урамшууллын бүлэг:', expanded=True):
-        code_group_acc_insur_df = df[df['CODE_GROUP'].isin(['Insurance','Investments & Securities','Account Opening'])].groupby(['MONTH_NUM', 'CODE_GROUP'],observed=True).agg({
+        code_group_acc_insur_df = df[df['CODE_GROUP'].isin(['Insurance','Investments & Securities','Account Opening'])].groupby(['MONTH_NUM', 'CODE_GROUP']).agg({
             'JRNO': 'count',
             'TXN_AMOUNT': 'sum',
             'CUST_CODE': 'nunique'
         }).reset_index()
 
-        monthly_total_points_df = df.groupby('MONTH_NUM',observed=True)['TXN_AMOUNT'].sum().reset_index(name='TOTAL_POINTS')
+        monthly_total_points_df = df.groupby('MONTH_NUM')['TXN_AMOUNT'].sum().reset_index(name='TOTAL_POINTS')
 
         code_group_acc_insur_df = pd.merge(left=code_group_acc_insur_df,right = monthly_total_points_df, on='MONTH_NUM')
         code_group_acc_insur_df['PERCENTAGE'] =( code_group_acc_insur_df['TXN_AMOUNT'] / code_group_acc_insur_df['TOTAL_POINTS'] * 100 ).round(2)
