@@ -1,30 +1,31 @@
 import streamlit as st
 import pandas as pd
-from data_loader import load_data, get_df
+from data_loader import load_data, get_lookup, warm_year_cache
+import time
 
 df = load_data()
 
 st.title('АРДЫН ЭРХ ОНООНЫ ДАТАСЕТ ТОВЧ ТАЙЛАН')
-st.caption('Descriptive Analysis Report (2025.01.01 – 2025.12.31)')
+st.caption('Descriptive Analysis Report (2024.01.01 – 2025.12.31)')
 
 # 1. Executive Summary
 st.markdown("""
-### Товч хураангуй 
-Энэхүү тайлан нь хэрэглэгчдийн хийсэн гүйлгээнээс авсан шагналын онооны түвшин, гүйлгээний төрөл, давтамж, сегментчилэл болон ерөнхий зан төлөвийг тодорхойлох зорилготой
+    ### Товч хураангуй 
+    Энэхүү тайлан нь хэрэглэгчдийн хийсэн гүйлгээнээс авсан шагналын онооны түвшин, гүйлгээний төрөл, давтамж, сегментчилэл болон ерөнхий зан төлөвийг тодорхойлох зорилготой
 
-**Гол олдворууд:**
-* **Хэрэглэгчдийн олонх:** 1,000 оноонд хүрэхгүй байна
-* **Төвлөрөл:** Онооны тархалт нь цөөн гүйлгээний төрлүүдэд төвлөрсөн
-* **Чухал сар:** 4 болон 5-р сар бүх үзүүлэлтээр давамгайлсан сар болсон нь **Inverstor Week** -тэй холбоотой 
----
-""")
+    **Гол олдворууд:**
+    * **Хэрэглэгчдийн олонх:** 1,000 оноонд хүрэхгүй байна
+    * **Төвлөрөл:** Онооны тархалт нь цөөн гүйлгээний төрлүүдэд төвлөрсөн
+    * **Чухал сар:** 4 болон 5-р сар бүх үзүүлэлтээр давамгайлсан сар болсон нь **Inverstor Week** -тэй холбоотой 
+    ---
+    """)
 
 # 2. Dataset Overview
 with st.expander('Датасетийн ерөнхий мэдээлэл', expanded=True):
     
     st.subheader('Датасетийн бүтэц')
     col1, col2, col3 = st.columns(3)
-    col1.metric(f"Нийт мөрийн тоо", "2,484,682")
+    col1.metric(f"Нийт мөрийн тоо", f"{len(df):,}")
     col2.metric("Баганы тоо", "9")
     col3.metric("Эх сурвалж", "Системийн лог")
 
@@ -57,25 +58,22 @@ with st.expander('Датасетийн ерөнхий мэдээлэл', expande
     with analysis_col2:
         st.info("**CUST_CODE & DATE**")
         st.write(f"* **Нийт өвөрмөц хэрэглэгч:** {df.CUST_CODE.nunique():,} хэрэглэгч")
-        st.write(f"* **Хугацаа:** 2025.01.01 – 2025.12.31")
+        st.write(f"* **Хугацаа:** 2024.01.01 – 2025.12.31")
         
         st.info("**OPER_CODE**")
         st.write(f"* **Нийт өвөрмөц төлбөрийн сонголт:** {df['OPER_CODE'].nunique()} төрөл")
-        #st.write(f"* **Түгээмэл төлбөрийн сонголт :** {df['OPER_CODE'].value_counts().idxmax()}")
 
-# Дата чанарын хэсэг
-# 3. Data Quality
-with st.expander('3. Өгөгдлийн чанарын үнэлгээ', expanded=False):
-    st.warning("Датасет дээр хийгдсэн цэвэрлэгээ")
-    st.markdown(f"""
-    * **TXN_DESC:** Зарим тайлбарын багана давхардсан болон стандарт бус тексттэй байсныг зассан.
-    * **Cleaning:** Зарим утгуудыг системд оруулахад бэлтгэж цэвэрлэсэн.
-    * **Missing Values:** **{len(df[df['LOYAL_CODE'] == 'None'])}** мөр `LOYAL_CODE`-гүй байсан.
-    * **Anomaly:** 
-        -   Даатгал болон Данс нээгдсний гүйлгээний оноо **7-р сарын 2** ноос хойш байхгүй болсон.
-        -   **3** гүйлгээ бутархай дүнтэй байсан.
-    """)
 
-# Sidebar нэмэлт мэдээлэл
-# st.sidebar.title("Шүүлтүүр")
-# st.sidebar.info("Энэ хэсэгт датаг шүүх тохиргоонуудыг нэмж болно.")
+loyal = get_lookup()
+
+# available_years = sorted(df["year"].unique())
+# selected_year = st.sidebar.selectbox("Жил сонгох", available_years, index=len(available_years)-1)
+
+# with st.spinner("Preparing Data"):
+#     start = time.perf_counter()
+#     warm_year_cache(df, loyal, selected_year)
+#     end = time.perf_counter()
+
+# st.success(f"Data Ready took {end - start:.2f} seconds")
+
+

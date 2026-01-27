@@ -1,69 +1,55 @@
 import streamlit as st
-from data_loader import load_data, get_lookup
-from page1 import bar_plot_h
+from data_loader import (
+    load_data,
+    get_lookup,
+    get_most_growing_loyal_code,
+    get_page2_data
+)
 import plotly.graph_objects as go
 import plotly.express as px
 import pandas as pd
+import numpy as np  
 import math
 
 @st.cache_data(show_spinner=False)
 def load_base():
-    return load_data(), get_lookup()
+    df = load_data()
+    lookup = get_lookup()
+    return df, lookup
 
 df, loyal_code_to_desc = load_base()
 
-tab1, tab2, tab3, tab4 = st.tabs(["Methodology", "ГҮЙЛГЭЭНИЙ ОНООНЫ ТАРХАЦ", 'ГҮЙЛГЭЭНИЙ ТӨРЛИЙН ШИНЖИЛГЭЭ (БҮЛЭГЛЭСЭН)', 'ГҮЙЛГЭЭНИЙ ШИНЖИЛГЭЭ'])
-month_order = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 
-               'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
+page2 = get_page2_data(df, loyal_code_to_desc)
+grouped_reward = page2["grouped_reward"]
+transaction_summary = page2["transaction_summary"]
+transaction_summary_with_pad = page2["transaction_summary_with_pad"]
+
+available_years = sorted(transaction_summary["year"].unique())
+
+tab1, tab2, tab3, tab4 = st.tabs(["METHODOLOGY", "ГҮЙЛГЭЭНИЙ ОНООНЫ ТАРХАЦ", 'ГҮЙЛГЭЭНИЙ ТӨРЛИЙН ШИНЖИЛГЭЭ (БҮЛЭГЛЭСЭН)', 'ГҮЙЛГЭЭНИЙ ШИНЖИЛГЭЭ'])
 
 
-# Total Points by Reward group
-@st.cache_data(show_spinner=False)
-def get_grouped_reward():
-    grouped_reward = df.groupby(['CODE_GROUP','MONTH_NUM', 'MONTH_NAME'])['TXN_AMOUNT'].sum().reset_index()
-    grouped_reward.rename(columns = {'TXN_AMOUNT': 'TOTAL_AMOUNT'}, inplace=True)
-    return grouped_reward
-
-
-@st.cache_data(show_spinner=False)
-def build_transaction_summary(df, lookup):
-    ts = (
-        df.groupby(
-            ['LOYAL_CODE', 'MONTH_NAME', 'MONTH_NUM', 'CODE_GROUP'],
-            observed=True
-        )
-        .agg(
-            Transaction_Freq=('JRNO', 'size'),
-            Total_Users=('CUST_CODE', 'nunique'),
-            Total_Amount=('TXN_AMOUNT', 'sum')
-        )
-        .reset_index()
-    )
-    ts['DESC'] = ts['LOYAL_CODE'].map(lookup)
-    return ts
 
 @st.cache_data(show_spinner=False)
 def build_animation_fig(transaction_summary):
+    all_groups = sorted(transaction_summary["GROUP"].unique())
     fig = px.scatter(
         transaction_summary,
         x='Total_Users',
         y='Total_Amount',
         size='Transaction_Freq',
         color='GROUP',
-        animation_frame='MONTH_NAME',
+        animation_frame='year_month',
         animation_group='LOYAL_CODE',
         log_x=True,
         log_y=True,
         size_max=55,
-        category_orders={'MONTH_NAME': month_order},
         color_discrete_sequence=px.colors.qualitative.Vivid,
+        category_orders={"GROUP": all_groups},
+        custom_data=['year_month', 'DESC',],
+        hover_name = 'DESC'
     )
     return fig
-
-
-transaction_summary = build_transaction_summary(df, loyal_code_to_desc)
-
-grouped_reward = get_grouped_reward()
 
 
 def donut_plot(df, labels_col, values_col, title_text=""):
@@ -139,93 +125,95 @@ with tab1:
             Тодорхой аймаг, хотод чиглэсэн кампанит ажлууд.
             """,
     )
-        st.dataframe(df.groupby('CODE_GROUP')['LOYAL_CODE'].unique(), use_container_width=True)
+        st.dataframe(df.groupby('CODE_GROUP',observed=True)['LOYAL_CODE'].unique(), use_container_width=True)
     
 with tab2:
 
-    transaction_summary.columns = ['LOYAL_CODE', 'MONTH_NAME', 'MONTH_NUM','GROUP','Transaction_Freq','Total_Users', 'Total_Amount', 'DESC']
+    x_limit = np.log10(transaction_summary_with_pad["Total_Users"].max()) + 0.5
+    y_limit = np.log10(transaction_summary_with_pad["Total_Amount"].max()) + 0.7
+    max_freq = transaction_summary_with_pad["Transaction_Freq"].max()
 
-    significant_movers = [
-        '10K_TRANSACTION_CARD',
-        '10K_CHARGE_SAVINGS2',
-        '10K_GET_LOTTO',
-        '10K_CHARGE_LIFE_OLD',
-    ]
+    fig = build_animation_fig(transaction_summary_with_pad)
 
-    transaction_summary['MOVERS'] = transaction_summary['LOYAL_CODE'].isin(significant_movers)
-    movers_df = transaction_summary[transaction_summary['MOVERS'] == True]
-
-    fig = build_animation_fig(transaction_summary)
     fig.update_traces(
         marker=dict(
-            line=dict(width=1, color='white'),
-            opacity=0.8
-        )
+            sizemode="area",
+            sizeref=2.0 * max_freq / (55 ** 2),
+            sizemin=6,
+            opacity=0.65,
+        ),
+        hoverlabel=dict(bgcolor="white", font_size=13),
+        hovertemplate="<br>".join([
+            "<b>%{customdata[1]}</b>",
+            "Он Сар: %{customdata[0]}",
+            "Хэрэглэгч: %{x:,.0f}",
+            "Оноо: %{y:,.0f}",
+            "<extra></extra>"
+        ])
     )
 
-
-
-    # Animation Smoothness 
     fig.update_layout(
-        updatemenus=[{
-            "buttons": [
-                {
-                    "args": [None, {"frame": {"duration": 1000, "redraw": False},
-                                    "fromcurrent": True, 
-                                    "transition": {"duration": 600, "easing": "quadratic-in-out"}}],
-                    "label": "Play",
-                    "method": "animate"
-                },
-                {
-                    "args": [[None], {"frame": {"duration": 0, "redraw": False},
-                                    "mode": "immediate",
-                                    "transition": {"duration": 0}}],
-                    "label": "Pause",
-                    "method": "animate"
-                }
-            ],
-            "direction": "left",
-            "pad": {"r": 10, "t": 87},
-            "showactive": False,
-            "type": "buttons",
-            "x": 0.1,
-            "xanchor": "right",
-            "y": 0,
-            "yanchor": "top"
-        }],
-        height = 600,
-
-        coloraxis_showscale=False,
-        margin=dict(r=100), 
-        title=dict(
-            text=f'<b> Сарын Гүйлгээний Онооны Тархац </b>',
-            xanchor='center',
-            x = 0.5,
-            #font=dict(size=24)
-        ),
+        height=600,
+        template="plotly_white",
+        margin=dict(r=100, t=80, b=80),
+        title=dict(text="<b>Сарын Гүйлгээний Онооны Тархац</b>", x=0.5, xanchor="center"),
         xaxis=dict(
-            title_text="<b>Нийт давтагдаагүй хэрэглэгчдийн тоо (Log Scale)</b>",
-            title_font=dict(size=18),
-            tickfont=dict(size=14)
+            title_text="<b>Нийт давтагдаагүй хэрэглэгчдийн тоо</b>",
+            range=[0, x_limit],
+            dtick=1,
+            gridcolor="#F0F0F0",
+            tickformat=".1s"
         ),
         yaxis=dict(
-            title_text="<b>Нийт цуглуулсан оноо (Log scale)</b>",
-            title_font=dict(size=18),
-            tickfont=dict(size=14)
-        )
+            title_text="<b>Нийт цуглуулсан оноо</b>",
+            range=[3, y_limit],
+            dtick=1,
+            gridcolor="#F0F0F0",
+            tickformat=".1s"
+        ),
+        legend=dict(
+            title="<b>Гүйлгээний бүлэг</b>",
+            yanchor="top", y=1,
+            xanchor="left", x=1.02
+        ),
     )
-    
-    fig.add_annotation(
-        text= 'Гүйлгээний давтамжийн тоог дүрсийн хэмжээгээр илэрхийлэв',
-        showarrow=False,
-        x=math.log10(10000),
-        y=math.log10(1500),
-        font=dict(
-            size=15,
-            color="grey"
-        )
-    )
+    # Animation Controls Styling 
+    updatemenus=[{ 
+        "buttons": [ 
+            {
+                "args": [None, {
+                    "frame": {"duration": 3000, "redraw": False}, 
+                    "fromcurrent": True, 
+                    "transition": {"duration": 1500, "easing": "quadratic-in-out"} 
+                }], 
+                "label": "▶ Play", 
+                "method": "animate"
+            }, 
+            {
+                "args": [[None], {
+                    "frame": {"duration": 0, "redraw": False}, 
+                    "mode": "immediate", 
+                    "transition": {"duration": 0}
+                }], 
+                "label": "|| Pause", 
+                "method": "animate"
+            } 
+        ], 
+        "direction": "left", 
+        "pad": {"r": 10, "t": 40}, 
+        "showactive": False, 
+        "type": "buttons", 
+        "x": 0.1, 
+        "xanchor": "right", 
+        "y": 0, 
+        "yanchor": "top" 
+    }]
+
+    fig.update_xaxes(minor_showgrid=False, showline=True, linewidth=1, linecolor="black", mirror=True)
+    fig.update_yaxes(minor_showgrid=False, showline=True, linewidth=1, linecolor="black", mirror=True)
+
     st.plotly_chart(fig, use_container_width=True)
+    
 
         
     #st.dataframe(transaction_summary)
@@ -253,7 +241,7 @@ with tab2:
             
             st.markdown(f"""
                 - 2025 оны **1–12** дугаар саруудад нийт **{df['LOYAL_CODE'].nunique()}** төрлийн урамшуулал олгогдсон байна.
-                - 4-р сард **54** төрлийн урамшуулал олгогдсон нь хамгийн олон төрлийн урамшуулал олгосон сар болсон байна.
+                - 2025 оны 4-р сард **54** төрлийн урамшуулал олгогдсон нь хамгийн олон төрлийн урамшуулал олгосон сар болсон байна.
                 - Графикийн баруун дээд хэсэгт дараах урамшууллууд тогтвортой байрлаж байна:
                     -   **1к эрхийн гүйлгээний**
                     -   **Тэтгэврийн хуримтлал цэнэглэлтийн**
@@ -263,11 +251,30 @@ with tab2:
             """)
             st.caption('Үндсэн, тогтмол орлого бүрдүүлэгч урамшуулал гэж дүгнэж болно.')
 
-        st.divider()
+    with st.expander(expanded=False, label = 'Өндөр өсөлттэй урамшууллууд:'):
+        
 
-        movers_df = movers_df.sort_values(['DESC', 'MONTH_NUM']) 
+        selected_year = st.selectbox(
+            "Set Year to analyze",
+            options=available_years,
+            index=len(available_years) - 1
+        )
+        
+        df_year = df[df["year"] == selected_year]
+    
+        movers, movers_df = get_most_growing_loyal_code(df_year)
 
+        current_movers_list = movers.tolist()
 
+        # 4. Filter visualization dataset
+        movers_df = (
+            transaction_summary[(
+                (transaction_summary["LOYAL_CODE"].isin(current_movers_list)) &
+                (transaction_summary['year'] == selected_year)
+            )]
+            .sort_values(["DESC", "year_month"])
+        )
+ 
         fig = px.scatter(
             movers_df,
             x='Total_Users', 
@@ -276,13 +283,27 @@ with tab2:
             color='DESC',
             size_max=30, 
             hover_name='LOYAL_CODE',
-            hover_data=['MONTH_NAME'],
+            hover_data=['year_month'],
             
         )
-        fig.update_traces(marker=dict(sizemode='area'))
+        fig.update_traces(
+            marker=dict(sizemode='area',
+                #sizeref=2. * max_freq / (30 ** 2),  # lock size scaling
+                sizemin=6,
+                opacity=0.65,            
+            )
+        )
+        fig.update_layout(
+            legend = dict(
+                orientation = 'h',
+                yanchor="top",
+                y = 1.1,
+                xanchor = 'right',
+                x=0.99,
+                title = None
+            )
+        )
 
-
-        # 3. Add arrows for each group (DESC)
         for desc in movers_df['DESC'].unique():
             df_sub = movers_df[movers_df['DESC'] == desc]
             n = len(df_sub) - 1
@@ -304,85 +325,87 @@ with tab2:
                     arrowcolor=f"rgba(34,139,34 {alpha})"
                 )
 
-        st.subheader('Ажиглалтууд: Өндөр өсөлттэй урамшууллууд')
+        st.subheader(f"Өндөр өсөлттэй урамшууллууд — {selected_year} он")
         st.plotly_chart(fig,use_container_width=True)
 
-        col1,col2 = st.columns(2)
-        with col1:
-            st.markdown(f"""
-                ##### Картын гүйлгээний урамшуулал:
-                - 2025 оны эхэнд зүүн доор байрлалтай байсан бол тогтвортойгоор баруун дээд булан руу өгсөж байгаа нь 
-                нийт урамшууллын дүн **(2,094 - 164,912)** болон нийт оролцогчдын тоо **(262 - 1,204)** ихэссэн байгааг 
-                илтгэж байна. 
-                - Ингэснээр 2025 оны хамгийн өндөр өсөлттэй **(1-р сараас хойш 70.7 дахин өсөлттэй, сарын дундаж өсөлт 70%)** урамшуулал болсон байна.      
-            """)
+        summary = movers_df.groupby("DESC").agg(
+            users_start=("Total_Users", "first"),
+            users_end=("Total_Users", "last"),
+            amount_start=("Total_Amount", "first"),
+            amount_end=("Total_Amount", "last")
+        ).reset_index()
 
-        with col2:
-            st.markdown("""
-                ##### Хэрэглэгчийн өсөлт:
-                - Хамгийн өндөр өсөлттэй урамшууллуудаас харахад **4-р сард** хэрэглэгчийн тоо хамгийн өндөр байна. 
-                - **4-р сард лотто** авсан хэрэглэгчдийн тоо бусад бүх саруудаасаа **44% - 82%** аар илүү байна.
-            """)
+        summary["user_growth"] = summary["users_end"] / summary["users_start"]
+        summary["amount_growth"] = summary["amount_end"] / summary["amount_start"]
         
-        st.divider()
+        st.caption('Онооны Өсөлт:')
+        cols_amount = st.columns(4)
 
-        st.markdown(f"""
-            ##### Гүйлгээний Урамшуулал:  
-            - 2025 оны бүх сард хамгийн өндөр урамшууллын оноо тараагдсан мөн хамгийн олон оролцогчид оролцсон төрөл.
-            - 2025 онд нийт **{df[df['CODE_GROUP'] == 'Financial Transactions']['CUST_CODE'].nunique():,}** хэрэглэгчид урамшуулал авж **{df[df['CODE_GROUP'] == 'Financial Transactions']['TXN_AMOUNT'].sum():,.0f}** оноо тараагдсан.
-        """)
+        for i, (_, row) in enumerate(summary.iterrows()):
+            delta_pct = (
+                (row["amount_end"] - row["amount_start"]) / row["amount_start"] * 100
+                if row["amount_start"] != 0 else 0
+            )
 
+            with cols_amount[i % 4].container(border=True):
+                st.metric(
+                    label=row["DESC"],
+                    value=f"{row['amount_end']:,.0f}",
+                    delta=f"{delta_pct:.1f}%",
+                    help=f"Эхлэл оноо: {row['amount_start']:,}"
+                )
 
+        st.caption('Хэрэглэгчдийн Өсөлт:')
+        cols_users = st.columns(4)
+        for i, (_, row) in enumerate(summary.iterrows()):
+            delta_pct = (
+                (row["users_end"] - row["users_start"]) / row["users_start"] * 100
+                if row["users_start"] != 0 else 0
+            )
 
+            with cols_users[i % 4].container(border=True):
+                st.metric(
+                    label=row["DESC"],
+                    value=f"{row['users_end']:,.0f}",
+                    delta=f"{delta_pct:.1f}%",
+                    help=f"Эхлэл хэрэглэгч: {row['users_start']:,}"
+                )
 
     with st.expander(expanded=False, label = 'Хүснэгт харах:'):
-        #st.dataframe(movers_df, use_container_width=True)
         st.dataframe(transaction_summary, use_container_width=True)
-        #st.text(transaction_summary.GROUP.unique())
-        #transaction_summary.to_clipboard()
 
 
 with tab3:
   
-    line_chart_df = grouped_reward[['CODE_GROUP', 'MONTH_NUM', 'TOTAL_AMOUNT']]
-    line_chart_df = line_chart_df.sort_values('MONTH_NUM')
+    line_chart_df = grouped_reward[['CODE_GROUP', 'year_month', 'TOTAL_AMOUNT']]
+    line_chart_df = line_chart_df.sort_values('year_month')
 
     line_chart_fig = px.line(line_chart_df, 
-            x = 'MONTH_NUM', 
+            x = 'year_month', 
             y = 'TOTAL_AMOUNT', 
-            #log_y= True,
             color = 'CODE_GROUP',
             markers=True,
             title='Урамшууллын Бүлгийн Чиг Хандлага Сараар',
-            labels={'MONTH_NUM': 'Сар', 'TOTAL_AMOUNT': 'Нийт Оноо'}
+            labels={'year_month': 'Сар', 'TOTAL_AMOUNT': 'Нийт Оноо'}
     )
-    line_chart_fig.update_layout(xaxis=dict(tickmode='linear'), 
+    line_chart_fig.update_layout( 
         title=dict(
             xanchor = 'center',
             x = 0.5
         ),    
-        #hovermode= 'x unified' 
+        hovermode= 'x unified' 
     )
     line_chart_fig.update_traces(
         mode="lines+markers",
         hovertemplate="<b>%{fullData.name}</b><br>Month: %{x}<br>Total: %{y:,.0f}<extra></extra>"
     )
-
-    line_chart_fig.add_vline(x=4, 
-              line_dash="dash", 
-              line_color="red",
-              line_width = 2, 
-              annotation_text="Inverstor Week",
-              opacity=0.3
-    )
     
     st.plotly_chart(line_chart_fig, use_container_width=True)
-    st.subheader('2025 ОНЫ ХЭРЭГЛЭГЧДИЙН ГҮЙЛГЭЭНИЙ ТӨРЛИЙН ШИНЖИЛГЭЭ')
 
     with st.expander(expanded=True, label= 'Тайлбар:'):
 
         st.markdown("""
-            #### Бүлэглэсэн гүйлгээний шинжилгээ
+            #### 2025 оны хэрэглэгчдийн бүлэглэсэн гүйлгээний шинжилгээ
             -   Сар бүр **"Гүйлгээний Урамшуулал"** нь хамгийн өндөр хувийг эзэлсэн байна
                 -   8-р сард нийт олгогдсон урамшууллын онооны **92.5%-ыг** эзэлсэн нь хамгийн өндөр хувь эзэлсэн сар болсон. 
                 -   Харин эсрэгээрээ 4-р сард нийт олгогдсон урамшууллын онооны **49.3%-ыг** эзэлсэн нь энэ бүлгийн хамгийн бага хувь эзэлсэн сар болсон байна
@@ -395,13 +418,12 @@ with tab3:
         """)
         
     with st.expander('Сар тус бүрээр харах:', expanded=False):
-        available_months = grouped_reward['MONTH_NAME'].unique()
-        final_options = [m for m in month_order if m in available_months]
+        available_months = sorted(grouped_reward['year_month'].unique())
         selected_month = st.selectbox(
             'Choose a month to analyze',
-            options=final_options,
+            options=available_months,
         )
-        monthly_grouped_reward = grouped_reward[grouped_reward['MONTH_NAME'] == selected_month]
+        monthly_grouped_reward = grouped_reward[grouped_reward['year_month'] == selected_month]
 
         fig = donut_plot(
             monthly_grouped_reward, 
@@ -420,112 +442,50 @@ with tab3:
 
 with tab4:
 
-    transaction_summary_year = transaction_summary.groupby('LOYAL_CODE')['Total_Amount'].sum().reset_index()
-    top5_transaction = transaction_summary_year.nlargest(5,columns='Total_Amount')
+    transaction_summary = transaction_summary[transaction_summary.LOYAL_CODE != 'None']
 
-    other_total = transaction_summary_year['Total_Amount'].sum() - top5_transaction['Total_Amount'].sum()
+    # 2. Year Selection UI
+    selected_year = st.selectbox("Select year to analyze:", options=available_years)
 
+    # 3. Filter data for the selected year
+    ts_filtered = transaction_summary[transaction_summary['year'] == selected_year]
+
+    # 4. Aggregate data for the Top 5 + Others logic
+    ts_agg = ts_filtered.groupby('LOYAL_CODE')['Total_Amount'].sum().reset_index()
+
+    # Separate Top 5
+    top5 = ts_agg.nlargest(5, columns='Total_Amount')
+    other_total = ts_agg['Total_Amount'].sum() - top5['Total_Amount'].sum()
+
+    # Create 'Others' row
     other_row = pd.DataFrame({'LOYAL_CODE': ['Бусад'], 'Total_Amount': [other_total]})
 
-    transaction_summary_year_top5 = pd.concat([top5_transaction, other_row], ignore_index=True)        
-    transaction_summary_year_top5['DESC'] = transaction_summary_year_top5['LOYAL_CODE'].map(loyal_code_to_desc)
-    transaction_summary_year_top5['DESC'] = transaction_summary_year_top5['DESC'].fillna('Бусад')
+    # Combine and Map Descriptions
+    ts_final = pd.concat([top5, other_row], ignore_index=True)
+    ts_final['DESC'] = ts_final['LOYAL_CODE'].map(loyal_code_to_desc).fillna('Бусад')
+
+    # 5. Create the Plot
     fig = donut_plot(
-        transaction_summary_year_top5,
-        labels_col='DESC' ,
+        ts_final,
+        labels_col='DESC',
         values_col='Total_Amount',
-        title_text=f'Урамшууллын Эзлэх Хувь Жилийн Дунджаар (Топ 5 болон бусад)'
+        title_text=f'{selected_year} Оны Урамшууллын Бүтэц (Топ 5 болон Бусад)'
     )
+
+    # 6. Final Polish
     fig.update_traces(
-        customdata = transaction_summary_year_top5[['DESC']],
-        hovertemplate="<b>%{label}</b><br>Description: %{customdata[0]}<br>Amount: %{value}<br>Percent: %{percent}" 
+        customdata=ts_final[['DESC']],
+        hovertemplate="<b>%{label}</b><br>Дүн: %{value:,.0f}<br>Хувь: %{percent}<extra></extra>"
     )
+
     fig.update_layout(
-        title = dict(
-            font=dict(size=15),
-            x=0.3,
-            y=0.9
-        )
-    ) 
+        title=dict(font=dict(size=18), x=0.5, xanchor='center', y=0.95),
+        margin=dict(t=80, b=20)
+    )
 
     st.plotly_chart(fig, use_container_width=True)
 
-    transaction_bar_plot_df = df.groupby('LOYAL_CODE').agg({
-        'TXN_AMOUNT': 'sum',
-        'JRNO': 'count'
-    })
-    transaction_bar_plot_df['AVG'] = (transaction_bar_plot_df['TXN_AMOUNT'] / transaction_bar_plot_df['JRNO']).round(2)
-    transaction_bar_plot_df['PERCENTAGE'] =(( transaction_bar_plot_df['TXN_AMOUNT']/transaction_bar_plot_df['TXN_AMOUNT'].sum() )* 100).round(2)
-    transaction_bar_plot_df = transaction_bar_plot_df[transaction_bar_plot_df['PERCENTAGE']>2].reset_index()
-    transaction_bar_plot_df = transaction_bar_plot_df.sort_values(by='AVG')
-    transaction_bar_plot_df['DESC'] = transaction_bar_plot_df['LOYAL_CODE'].map(loyal_code_to_desc)
-
-
-    fig = px.bar(
-        transaction_bar_plot_df,
-        x='AVG',
-        y='DESC',
-        color = 'AVG',
-        text = 'AVG',
-        labels= {
-            'DESC': 'ГҮЙЛГЭЭНИЙ НЭР',
-            'AVG': 'ДУНДАЖ ОНОО',
-            'PERCENTAGE': 'Эзлэх Хувь'
-        }
-    )
-
-    fig.update_layout(
-        title=dict(
-            text = 'Нэгж гүйлгээний дундаж урамшууллын оноо',
-            xanchor = 'center',
-            x = 0.5
-        ),
-    )
-    fig.update_traces(textposition='outside')
-
-    with st.expander(expanded=False, label='Тайлбар:'):
-        st.markdown(f"""
-            #### Гүйлгээний шинжилгээ
-            -	2025 онд **Топ 5** гүйлгээний төрөл нийлээд **65.6%** буюу нийт онооны талаас их хувийг бүрдүүлж байна.
-            -	Бүх гүйлгээний төрлүүдийн **10%** (9/84) нь нийт онооны **80%** ийг бүрдүүлж байна.
-                    
-            #### 1к эрхийн гүйлгээний урамшуулал:  
-            - 2025 оны бүх сард хамгийн өндөр урамшууллын оноо тараагдсан мөн хамгийн олон оролцогчид оролцсон төрөл.
-            - 2025 онд нийт **{df[df['LOYAL_CODE'] == '10K_TRANSACTION']['CUST_CODE'].nunique():,}** хэрэглэгчдэд **{df[df['LOYAL_CODE'] == '10K_TRANSACTION']['TXN_AMOUNT'].sum():,.0f}** оноо тараагдсан.
-        """)
     
-    st.divider()
-
-    st.subheader("Нэгж гүйлгээний дундаж урамшууллын онооны шинжилгээ")
-    st.plotly_chart(fig)
-    st.caption('Нийт оноонд 1% аас илүү хувь нэмэр оруулсан гүйлгээнүүдийг жагсаав.')
-     
-    with st.expander(expanded=False, label='Тайлбар:'):
-
-
-        st.markdown("""
-        ### Графикийн тайлбар
-        -   Гүйлгээний төрлүүдийг **нэг гүйлгээнд ногдох дундаж урамшууллын оноогоор** харьцуулсан  
-        -   **Багана:** Дундаж онооны хэмжээ
-        -   **Баганан дээрх хувь:** Гүйлгээний нийт оноонд эзлэх хувь
-        """)
-
-        st.markdown("""
-        ### Гол ажиглалтууд
-        - **Даатгал, хадгаламж, тэтгэврийн хуримтлал** зэрэг гүйлгээнүүд:
-        - Нэг удаад **өндөр оноо** олгодог
-            - Нийт оноонд эзлэх хувь **харьцангуй бага**
-        - **Ердийн гүйлгээ**:
-            - Дундаж оноо **бага** харин нийт оноонд эзлэх хувь **хамгийн өндөр**
-        """)
-
-        st.markdown("""
-        ### Зан төлөвийн ялгаа
-        - **Дундаж оноо өндөр + эзлэх хувь бага**  
-            -   Өндөр үнэ цэнтэй, ховор хийгддэг гүйлгээ  
-        - **Дундаж оноо бага + эзлэх хувь өндөр**  
-            -  Өдөр тутмын, олон давтамжтай гүйлгээ
-        """)
 
     with st.expander(expanded=False, label=('Хүснэгт харах:')):
-        st.dataframe(transaction_summary_year,use_container_width=True)
+        st.dataframe(ts_final,use_container_width=True)
