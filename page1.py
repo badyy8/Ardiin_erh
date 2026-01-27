@@ -7,6 +7,7 @@ from plotly.subplots import make_subplots
 
 from data_loader import load_segment_counts_cutoff_fast, get_page1_bundle
 
+st.set_page_config(page_title="ХЭРЭГЛЭГЧДИЙН ОНООНЫ ТАРХАЦ", layout="wide")
 st.title("ХЭРЭГЛЭГЧДИЙН ОНООНЫ ТАРХАЦ")
 
 color_2025 = "#3498DB"
@@ -99,7 +100,7 @@ with tab3:
     fig.update_yaxes(secondary_y=True, range=[0, max_pct * 1.2])
 
     # ✅ Replace deprecated
-    st.plotly_chart(fig)
+    st.plotly_chart(fig, width="stretch")
 
     with st.expander(expanded=True, label="Тайлбар:"):
         st.subheader("Ерөнхий тойм")
@@ -111,7 +112,7 @@ with tab3:
         )
 
     with st.expander(label="Хүснэгт харах:", expanded=False):
-        st.dataframe(monthly_reward_stat, hide_index=True)
+        st.dataframe(monthly_reward_stat, hide_index=True, width="stretch")
 
 
 # ---------------- TAB 2 ----------------
@@ -132,7 +133,7 @@ with tab2:
     fig.update_xaxes(type="category")
     fig.update_yaxes(range=[0, segment_counts_all["Counts"].max() * 1.05])
 
-    st.plotly_chart(fig,)
+    st.plotly_chart(fig, width="stretch")
 
     with st.expander("Тайлбар", expanded=True):
         st.subheader("2025 ОНЫ ХЭРЭГЛЭГЧДИЙН ОНООНЫ CUT-OFF СЕГМЕНТИЙН ШИНЖИЛГЭЭ")
@@ -211,7 +212,7 @@ with tab1:
     fig.update_yaxes(title_text="Нийт Оноо", secondary_y=False)
     fig.update_yaxes(title_text="Нийт Оролцогчид", secondary_y=True, rangemode="tozero")
 
-    st.plotly_chart(fig,)
+    st.plotly_chart(fig, width="stretch")
 
     with st.expander(expanded=True, label="Тайлбар:"):
         st.subheader("Ерөнхий тойм")
@@ -225,4 +226,4 @@ with tab1:
         )
 
     with st.expander(expanded=False, label="Хүснэгт харах:"):
-        st.dataframe(monthly_reward_stat, hide_index=True)
+        st.dataframe(monthly_reward_stat, width="stretch", hide_index=True)
