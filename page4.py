@@ -1,47 +1,25 @@
 import streamlit as st
-from data_loader import load_data, get_lookup, build_page4_data
+from data_loader import load_data, get_lookup, load_precomputed_page4
 import plotly.graph_objects as go
 import plotly.express as px
 import pandas as pd
 from plotly.subplots import make_subplots
 
-@st.cache_data(show_spinner=False)
-def load_base():
-    return load_data(), get_lookup()
+users_all, thresholds_all, seg_monthly_all, loyal_summary_all = load_precomputed_page4()
 
-df, loyal_code_to_desc = load_base()
+available_years = sorted(users_all["year"].unique())
 
-available_years = sorted(df["year"].unique())
+selected_year = st.sidebar.selectbox("Жил сонгох", available_years)
 
-selected_year = st.sidebar.selectbox(
-    "Жил сонгох",
-    available_years,
-    index=len(available_years) - 1
-)
+users_agg_df = users_all[users_all["year"] == selected_year].copy()
+thresholds = thresholds_all[thresholds_all["year"] == selected_year].iloc[0].to_dict()
+thresholds.pop("year", None)
+
+user_segment_monthly_df = seg_monthly_all[seg_monthly_all["year"] == selected_year].copy()
+segment_loyal_summary = loyal_summary_all[loyal_summary_all["year"] == selected_year].copy()
+
 
 st.sidebar.caption(f"Одоогийн сонголт: {selected_year}")
-
-# ONE cached call gives you everything for this year
-page_data = build_page4_data(df, loyal_code_to_desc, selected_year)
-
-df_year = page_data["df_year"]
-users_agg_df = page_data["users_agg_df"]
-thresholds = page_data["thresholds"]
-segment_loyal_summary = page_data["segment_loyal_summary"]
-user_segment_monthly_df = page_data["user_segment_monthly_df"]
-
-# unpack thresholds 
-txn_q25 = thresholds["txn_q25"]
-txn_q75 = thresholds["txn_q75"]
-days_q25 = thresholds["days_q25"]
-days_q75 = thresholds["days_q75"]
-points_q25 = thresholds["points_q25"]
-points_q75 = thresholds["points_q75"]
-achievers_txn_q25 = thresholds["achievers_txn_q25"]
-achievers_points_q25 = thresholds["achievers_points_q25"]
-
-user_reached_1000_agg = users_agg_df[users_agg_df["Reached_1000_Flag"] == 1]
-user_under_1000_agg = users_agg_df[(users_agg_df["Reached_1000_Flag"] == 0) & (users_agg_df["Inactive"] == 0)]
 
 
 tab1, tab2, tab3, tab4 = st.tabs(['Methodology',"Threshold Analysis (Users reached 1000)", "User Segmentation (Under 1000 Point)", 'User Segment Analysis'])
@@ -63,19 +41,19 @@ with tab1:
 
     with col1:
         st.subheader("Гүйлгээ")
-        st.metric("Low (Q25)", f"{txn_q25:.0f} гүйлгээ")
-        st.metric("High (Q75)", f"{txn_q75:.0f} гүйлгээ")
-        st.metric("Амжилтийн босго", f"{achievers_txn_q25:.0f} гүйлгээ", help="Bottom 25% of successful users")
+        st.metric("Low (Q25)", f"{thresholds['txn_q25']:.0f} гүйлгээ")
+        st.metric("High (Q75)", f"{thresholds['txn_q75']:.0f} гүйлгээ")
+        st.metric("Амжилтийн босго", f"{thresholds['achievers_txn_q25']:.0f} гүйлгээ", help="Bottom 25% of successful users")
 
     with col2:
         st.subheader("Өдөр")
-        st.metric("Low (Q25)", f"{days_q25:.0f} өдөр")
-        st.metric("High (Q75)", f"{days_q75:.0f} өдөр")
+        st.metric("Low (Q25)", f"{thresholds['days_q25']:.0f} өдөр")
+        st.metric("High (Q75)", f"{thresholds['days_q75']:.0f} өдөр")
 
     with col3:
         st.subheader("Нийт оноо")
-        st.metric("Low (Q25)", f"{points_q25:.0f}")
-        st.metric("High (Q75)", f"{points_q75:.0f}")
+        st.metric("Low (Q25)", f"{thresholds['points_q25']:.0f}")
+        st.metric("High (Q75)", f"{thresholds['points_q75']:.0f}")
 
     st.header("Segment Definition Logic")
 
@@ -85,9 +63,9 @@ with tab1:
         "Шалгуур": [
             "Transactions / Month = 1",
             "Points ≥ 1000",
-            f"Transactions ≥ {achievers_txn_q25:.0f}",
-            f"Transactions < {txn_q75:.0f}  AND  Days ≤ {days_q75:.0f}",
-            f"Transactions ≥ {txn_q75:.0f}  AND  Days > {days_q75:.0f}",
+            f"Transactions ≥ {thresholds['achievers_txn_q25']:.0f}",
+            f"Transactions < {thresholds['txn_q75']:.0f}  AND  Days ≤ {thresholds['days_q75']:.0f}",
+            f"Transactions ≥ {thresholds['txn_q75']:.0f}  AND  Days > {thresholds['days_q75']:.0f}",
             "Else (Fallback)"
         ],
         "Тайлбар": [
@@ -105,7 +83,7 @@ with tab1:
 
     st.dataframe(
         df_logic,
-        use_container_width=True,
+        width='stretch',
         hide_index=True,
         column_config={
             "Сегмэнт": st.column_config.TextColumn(width="small"),
@@ -116,13 +94,13 @@ with tab1:
 
 with tab2:
     st.subheader("Сарын 1000 онооны босгыг давсан хэрэглэгчид")
-
+    user_reached_1000_agg = users_agg_df[users_agg_df.Reached_1000_Flag == 1]
     c1, c2, c3, c4 = st.columns(4)
 
     c1.metric("Хэрэглэгч (≥1000 оноо)", f"{user_reached_1000_agg['CUST_CODE'].nunique():,}")
-    c2.metric("Дундаж гүйлгээ", f"{user_reached_1000_agg['Transaction_Count'].mean():.0f}")
-    c3.metric("Дундаж идэвхтэй хоног", f"{user_reached_1000_agg['Active_Days'].mean():.0f}")
-    c4.metric("Дундаж урамшуулын төрлүүд", f"{user_reached_1000_agg['Unique_Loyal_Codes'].mean():.0f}")
+    c2.metric("Дундаж гүйлгээ", f"{user_reached_1000_agg['Transaction_Count'].median():.0f}")
+    c3.metric("Дундаж идэвхтэй хоног", f"{user_reached_1000_agg['Active_Days'].median():.0f}")
+    c4.metric("Дундаж урамшуулын төрлүүд", f"{user_reached_1000_agg['Unique_Loyal_Codes'].median():.0f}")
 
     st.divider()
 
@@ -183,7 +161,7 @@ with tab2:
         margin=dict(l=20, r=20, t=100, b=20) 
     )
 
-    st.plotly_chart(fig_box, use_container_width=True)
+    st.plotly_chart(fig_box, width='stretch')
 
     st.divider()
 
@@ -194,6 +172,7 @@ with tab2:
 
     q1_txn = user_reached_1000_agg["Transaction_Count"].quantile(0.25)
     q1_days = user_reached_1000_agg["Active_Days"].quantile(0.25)
+    achievers_points_q25 = user_reached_1000_agg["Total_Points"].quantile(0.25)
 
     st.caption("Амжилттай хэрэглэгчдийн доод 25%-ийн түвшин")
 
@@ -246,7 +225,7 @@ with tab2:
             st.metric(
                 "Гүйлгээ",
                 f"{med_txn:.0f}",
-                help=f"Доод идэвхтэй хэрэглэгчид дунджаар ~{q1_txn:.0f} гүйлгээ хийдэг"
+                help=f"Доод идэвхтэй хэрэглэгчид дунджаар ~{med_txn:.0f} гүйлгээ хийдэг (median)"
             )
 
     with m2:
@@ -254,7 +233,7 @@ with tab2:
             st.metric(
                 "Идэвхтэй хоног",
                 f"{med_days:.0f}",
-                help=f"Тэд хамгийн багадаа ~{q1_days:.0f} өөр өдөр идэвхтэй байсан"
+                help=f"Тэд хамгийн багадаа ~{med_days:.0f} өөр өдөр идэвхтэй байсан (median)"
             )
 
     with m3:
@@ -334,10 +313,10 @@ with tab3:
     line_style = dict(color="#666666", width=2, dash="dash")
 
 
-    for val in [days_q25, days_q75]:
+    for val in [thresholds['days_q25'], thresholds['days_q75']]:
         fig.add_vline(x=val, line=line_style)
 
-    for val in [txn_q25, txn_q75, achievers_txn_q25]:
+    for val in [thresholds['txn_q25'], thresholds['txn_q75'], thresholds['achievers_txn_q25']]:
         fig.add_hline(y=val, line=line_style)
 
     #fig.update_traces(marker=dict(size=8)) 
@@ -356,12 +335,12 @@ with tab3:
     #    yaxis=dict(automargin=True),
 
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
     st.caption('Inactive болон 1000 оноо давсан хэрэглэгчдээс бусад сегмэнтийн тархалтыг харуулав')
 
 
-    st.divider()
+    #st.divider()
     # Count users per segment
     segment_counts = users_agg_df['User_Segment'].value_counts().reset_index()
     segment_counts.columns = ['Segment', 'User_Count']
@@ -376,9 +355,8 @@ with tab3:
     )
 
     fig.update_traces(textinfo="label+value+percent root")
-    st.plotly_chart(fig, use_container_width=True)
-   
-    st.caption('Сегмэнтэлсэн хэрэглэгчдийн бүлгийн тархацийг харуулав')
+    st.plotly_chart(fig,width='stretch')
+    #st.caption('Сегмэнтэлсэн хэрэглэгчдийн бүлгийн тархацийг харуулав')
 
     
 with tab4:
@@ -407,12 +385,12 @@ with tab4:
             font=dict(family="Arial", size=12),
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
     # ---- Monthly total points by segment
     with st.expander("Monthly User Point Distribution by Segment", expanded=False):
         user_segment_points_df = (
-            users_agg_df.groupby(["User_Segment", "year_month"])["Total_Points"]
+            users_agg_df.groupby(["User_Segment", "year_month"],observed=True)["Total_Points"]
             .sum()
             .reset_index()
         )
@@ -439,7 +417,7 @@ with tab4:
             font=dict(family="Arial", size=12),
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig,width='stretch')
 
     # ---- Monthly average points per user
     with st.expander("Monthly Average User Point Distribution by Segment", expanded=False):
@@ -473,34 +451,12 @@ with tab4:
             font=dict(family="Arial", size=12),
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig,width='stretch')
 
     # ============================================================
     # Loyal code analysis (year-filtered + correct merge keys)
     # ============================================================
 
-    segment_map = users_agg_df[["CUST_CODE", "year_month", "User_Segment"]].copy()
-
-    loyal_code_agg = (
-        df_year.groupby(["CUST_CODE", "LOYAL_CODE", "year_month"],observed = True)["TXN_AMOUNT"]
-        .sum()
-        .reset_index()
-    )
-
-    loyal_with_segments = pd.merge(
-        loyal_code_agg,
-        segment_map,
-        on=["CUST_CODE", "year_month"],
-        how="inner",
-    )
-
-    segment_loyal_summary = (
-        loyal_with_segments.groupby(["User_Segment", "LOYAL_CODE"],observed = True)["TXN_AMOUNT"]
-        .sum()
-        .reset_index()
-    )
-
-    segment_loyal_summary["DESC"] = segment_loyal_summary["LOYAL_CODE"].map(loyal_code_to_desc)
 
     ordered_segments = ["Achiever", "High_Effort", "Consistent", "Irregular_Participant", "Explorer", "Inactive"]
     segment_loyal_summary["User_Segment"] = pd.Categorical(
@@ -526,6 +482,6 @@ with tab4:
         )
 
         fig.update_layout(height=520, margin=dict(t=90, b=40, l=40, r=40), bargap=0.18, bargroupgap=0.12)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig,width='stretch')
 
 

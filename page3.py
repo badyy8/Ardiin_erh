@@ -11,7 +11,9 @@ def load_base():
     return load_data()
 
 df = load_base()
-df = df[(df.TXN_DATE >= '2025-01-01') & (df.TXN_DATE >= '2025-01-01')]
+df = df[(df.TXN_DATE >= "2025-01-01") & (df.TXN_DATE <= "2025-12-31")]
+
+
 
 st.header('ОНЦЛОХ САРЫН ШИНЖИЛГЭЭ 2025 ОН', anchor='center')
 
@@ -176,7 +178,7 @@ with tab1:
     col1,col2 = st.columns([0.6,0.4],gap='large')
 
     with col1:
-        st.plotly_chart(fig,use_container_width=True)
+        st.plotly_chart(fig,width='stretch')
 
     with col2:
         st.subheader('Дундаж оноо')
@@ -202,7 +204,7 @@ with tab1:
         #loyal_codes_45_only_list = loyal_codes_only_in_months(df, [4, 5])
         loyal_codes_45_only = {'LOYAL_CODES' : loyal_codes_45_only_list}
         loyal_codes_45_only = pd.DataFrame({'LOYAL_CODES': [loyal_codes_45_only_list]})
-        st.dataframe(loyal_codes_45_only,use_container_width=True,hide_index=True)
+        st.dataframe(loyal_codes_45_only,width = 'stretch',hide_index=True)
         st.caption(f'Бусад саруудад байхгүй зөвхөн 4,5-р сард олгогдсон нийт 28 урамшуулал байна')
 
     st.info(f"""
@@ -234,7 +236,7 @@ with tab1:
             x = 0.5
         )
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig,)
 
     st.markdown(f"""
         - Investor Week: **2025-04-28-аас 2025-05-02** ын хооронд болсон.
@@ -243,7 +245,7 @@ with tab1:
     """)
 
     with st.expander(expanded=False, label = "Хүснэгт харах:"):
-        st.dataframe(investor_week_amount,hide_index=True, use_container_width=True )
+        st.dataframe(investor_week_amount,hide_index=True, width = 'stretch' )
 
 with tab2:
 
@@ -333,7 +335,7 @@ with tab2:
                 xanchor="right",
                 x=1
             ))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, )
 
         with col2:
             st.subheader('Графикийн тайлбар:')
@@ -407,7 +409,7 @@ with tab2:
                     text = 'Шинэ Хэрэглэгчдийн Тоо болон Оноо'
                 )
             )
-        st.plotly_chart(fig,use_container_width=True)
+        st.plotly_chart(fig,width='stretch')
 
         st.subheader('Урамшуулалтай холбоотой уналт:')
         st.info("""

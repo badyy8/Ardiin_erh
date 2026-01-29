@@ -1,12 +1,11 @@
 import streamlit as st
 from data_loader import (
     load_data, get_lookup,
-    get_page5_bundle,   get_page5_loyal_normalized_profile
+    get_page5_bundle, 
 )
 import plotly.graph_objects as go
 import plotly.express as px
 import pandas as pd
-from plotly.subplots import make_subplots
 
 @st.cache_data(show_spinner=False)
 def load_base_data():
@@ -16,7 +15,8 @@ def load_base_data():
 
 df, loyal_code_to_desc = load_base_data()
 
-available_years = sorted(df["year"].dropna().unique())
+
+available_years = sorted(df["year"].dropna().astype(int).unique())
 
 selected_year = st.sidebar.selectbox(
     "Жил сонгох",
@@ -26,7 +26,11 @@ selected_year = st.sidebar.selectbox(
 
 st.sidebar.caption(f"Одоогийн сонголт: {selected_year}")
 
-bundle = get_page5_bundle(df, selected_year)
+@st.cache_data(show_spinner=True)
+def load_page5_bundle(df, selected_year):
+    return get_page5_bundle(df, selected_year)
+
+bundle = load_page5_bundle(df, selected_year)
 
 df_year = bundle["df_year"]
 monthly_customer_points = bundle["monthly_customer_points"]
@@ -43,13 +47,13 @@ tab3, tab4, tab5 = st.tabs([
 
 
 with tab3:
-    user_month_profile = get_page5_loyal_normalized_profile(df_year, users_agg_df)
 
     profile_wide = user_month_profile.pivot_table(
         index=["CUST_CODE", "MONTH_NUM"],
         columns="LOYAL_CODE",
         values="Normalized_Points",
-        fill_value=0
+        fill_value=0,
+        observed=True
     )
 
     avg_user_points = profile_wide.mean().reset_index()
@@ -95,7 +99,7 @@ with tab3:
             x=[row["Normalized_Points"]],
             name=row["DESC"],
             orientation="h",
-            hovertemplate="%{x:.0f} оноог %{fullData.name}-аас авсан<extra></extra>",
+            hovertemplate="<b>%{x:.0f}</b> оноог %{fullData.name}<extra></extra>",
         )
 
     # 2) MIDDLE
@@ -105,7 +109,7 @@ with tab3:
             x=[row["Normalized_Points"]],
             name=row["DESC"],
             orientation="h",
-            hovertemplate="%{x:.0f} оноог %{fullData.name}-аас авсан<extra></extra>",
+            hovertemplate="<b>%{x:.0f}</b> оноог %{fullData.name}<extra></extra>",
         )
 
     # 3) RIGHT ALWAYS LAST
@@ -115,7 +119,7 @@ with tab3:
             x=[row["Normalized_Points"]],
             name=row["DESC"],
             orientation="h",
-            hovertemplate="%{x:.0f} оноог %{fullData.name}-аас авсан<extra></extra>",
+            hovertemplate="<b>%{x:.0f}</b> оноог %{fullData.name}-аас авсан<extra></extra>",
             marker_color="grey"
         )
         
@@ -129,7 +133,7 @@ with tab3:
         legend_title_text="урамшууллын төрөл",
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig,width='stretch')
     st.caption("Даатгал авсны урамшууллын оноог оролцуулаагүй болно")
 
 
@@ -366,7 +370,7 @@ with tab5:
     col1, col2 = st.columns([0.5, 0.5], gap="large")
 
     with col1:
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig,width='stretch')
 
     with col2:
         st.markdown(f"""
@@ -388,6 +392,6 @@ with tab5:
         st.caption("Шинээр нэмэгдэж буй сегментүүд")
         st.dataframe(
             lift_source.style.background_gradient(cmap='Greens', subset=['Counts']),
-            use_container_width=True,
+            width='stretch',
             hide_index=True
         )

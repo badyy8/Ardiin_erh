@@ -35,7 +35,7 @@ with st.expander('Датасетийн ерөнхий мэдээлэл', expande
         "Тайлбар": ["Гүйлгээний өдөр", "Гүйлгээний тайлбар", "Гүйлгээний дугаар", "Гүйлгээний дүн (авсан оноо)", "Хэрэглэгчийн код", "Системийн дугаар", "Хэрэглэгчийн нэр", "Гүйлгээний код", "Төлбөрийн сонголт код",]
     }
     
-    st.dataframe(pd.DataFrame(var_data),hide_index=True, use_container_width=True )
+    st.dataframe(pd.DataFrame(var_data),hide_index=True,width='stretch')
 
     st.markdown("---")
     
@@ -53,7 +53,7 @@ with st.expander('Датасетийн ерөнхий мэдээлэл', expande
         
         st.info("**LOYAL_CODE**")
         st.write(f"* **Өвөрмөц код:** {df.LOYAL_CODE.nunique()}")
-        st.write(f"* **Түгээмэл:** 10K_TRANSACTION {len(df[df['LOYAL_CODE'] == '10K_TRANSACTION']):,}")
+        st.write(f"* **Түгээмэл:** {len(df[df['LOYAL_CODE'] == '10K_TRANSACTION']):,} (10K_TRANSACTION)")
 
     with analysis_col2:
         st.info("**CUST_CODE & DATE**")

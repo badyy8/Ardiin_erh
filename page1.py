@@ -74,8 +74,7 @@ with tab3:
     max_pct = monthly_reward_stat["percentage"].max()
     fig.update_yaxes(secondary_y=True, range=[0, max_pct * 1.2])
 
-    # ✅ Replace deprecated
-    st.plotly_chart(fig)
+    st.plotly_chart(fig,width='stretch')
 
     with st.expander(expanded=True, label="Тайлбар:"):
         st.subheader("Ерөнхий тойм")
@@ -108,7 +107,7 @@ with tab2:
     fig.update_xaxes(type="category")
     fig.update_yaxes(range=[0, segment_counts_all["Counts"].max() * 1.05])
 
-    st.plotly_chart(fig,)
+    st.plotly_chart(fig,width='stretch')
 
     with st.expander("Тайлбар", expanded=True):
         st.subheader("2025 ОНЫ ХЭРЭГЛЭГЧДИЙН ОНООНЫ CUT-OFF СЕГМЕНТИЙН ШИНЖИЛГЭЭ")
@@ -122,8 +121,8 @@ with tab2:
             **харьцангуй тогтвортой хэлбэлзэлтэй**
             """
         )
-
-    st.dataframe(segment_counts_all)
+    with st.expander(expanded=False, label="Хүснэгт харах:"):
+        st.dataframe(segment_counts_all)    
 
 # ---------------- TAB 1 ----------------
 with tab1:
@@ -189,18 +188,18 @@ with tab1:
     fig.update_yaxes(title_text="Нийт Оноо", secondary_y=False)
     fig.update_yaxes(title_text="Нийт Оролцогчид", secondary_y=True, rangemode="tozero")
 
-    st.plotly_chart(fig,)
+    st.plotly_chart(fig,width='stretch')
 
-    # with st.expander(expanded=True, label="Тайлбар:"):
-    #     st.subheader("Ерөнхий тойм")
-    #     st.markdown(
-    #         f"""
-    #         - **2024-2025** онуудад нийт **{user_level_stat_monthly["CUST_CODE"].nunique():,}** хэрэглэгч урамшууллын хөтөлбөрт хамрагдсан байна.
-    #         - 2024 онд: **{df_2024['total_new_users'].sum():,}** хэрэглэгч
-    #         - 2025 онд: **56,267** хэрэглэгч. (29,995 хэрэглэгчид бүх жилд ороролцсон)
-    #         - Сард дунджаар **{df.groupby('MONTH_NUM')['CUST_CODE'].nunique().mean():,.0f}** хэрэглэгч урамшуулалд оролцсон байна.
-    #         """
-    #     )
+    with st.expander(expanded=True, label="Тайлбар:"):
+        st.subheader("Ерөнхий тойм")
+        st.markdown(
+            f"""
+            - **2024-2025** онуудад нийт **{user_level_stat_monthly["CUST_CODE"].nunique():,}** хэрэглэгч урамшууллын хөтөлбөрт хамрагдсан байна.
+            - 2024 онд: **69,764** хэрэглэгч
+            - 2025 онд: **56,267** хэрэглэгч. (29,995 хэрэглэгчид бүх жилд ороролцсон)
+            - Сард дунджаар **{(user_level_stat_monthly.groupby("month_num", observed=True)["CUST_CODE"].nunique().mean()):,.0f}** хэрэглэгч урамшуулалд оролцсон байна.
+            """
+        )
 
     with st.expander(expanded=False, label="Хүснэгт харах:"):
         st.dataframe(monthly_reward_stat, hide_index=True)

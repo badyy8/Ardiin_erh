@@ -1,34 +1,26 @@
 import streamlit as st
-from data_loader import (
-    load_data,
-    get_lookup,
-    get_most_growing_loyal_code,
-    get_page2_data
-)
 import plotly.graph_objects as go
 import plotly.express as px
 import pandas as pd
-import numpy as np  
-import math
+import numpy as np
 
-@st.cache_data(show_spinner=False)
-def load_base():
-    df = load_data()
-    lookup = get_lookup()
-    return df, lookup
+from data_loader import (
+    get_lookup,
+    load_precomputed_page2,
+    load_page2_codegroup_map,
+    load_page2_movers_monthly,
+    get_most_growing_loyal_code_from_monthly,
+)
 
-df, loyal_code_to_desc = load_base()
+loyal_code_to_desc = get_lookup()
 
-page2 = get_page2_data(df, loyal_code_to_desc)
-grouped_reward = page2["grouped_reward"]
-transaction_summary = page2["transaction_summary"]
-transaction_summary_with_pad = page2["transaction_summary_with_pad"]
+grouped_reward, transaction_summary, transaction_summary_with_pad = load_precomputed_page2()
+codegroup_map = load_page2_codegroup_map()
+movers_monthly = load_page2_movers_monthly()
 
 available_years = sorted(transaction_summary["year"].unique())
 
 tab1, tab2, tab3, tab4 = st.tabs(["METHODOLOGY", "ГҮЙЛГЭЭНИЙ ОНООНЫ ТАРХАЦ", 'ГҮЙЛГЭЭНИЙ ТӨРЛИЙН ШИНЖИЛГЭЭ (БҮЛЭГЛЭСЭН)', 'ГҮЙЛГЭЭНИЙ ШИНЖИЛГЭЭ'])
-
-
 
 @st.cache_data(show_spinner=False)
 def build_animation_fig(transaction_summary):
@@ -125,7 +117,7 @@ with tab1:
             Тодорхой аймаг, хотод чиглэсэн кампанит ажлууд.
             """,
     )
-        st.dataframe(df.groupby('CODE_GROUP',observed=True)['LOYAL_CODE'].unique(), use_container_width=True)
+        st.dataframe(codegroup_map, width='stretch', hide_index=True)
     
 with tab2:
 
@@ -182,9 +174,9 @@ with tab2:
         "buttons": [ 
             {
                 "args": [None, {
-                    "frame": {"duration": 3000, "redraw": False}, 
+                    "frame": {"duration": 6000, "redraw": False}, 
                     "fromcurrent": True, 
-                    "transition": {"duration": 1500, "easing": "quadratic-in-out"} 
+                    "transition": {"duration": 3000, "easing": "quadratic-in-out"} 
                 }], 
                 "label": "▶ Play", 
                 "method": "animate"
@@ -209,10 +201,14 @@ with tab2:
         "yanchor": "top" 
     }]
 
+    fig.update_traces(marker=dict(line=dict(width=1, color='DarkSlateGrey')))
+
     fig.update_xaxes(minor_showgrid=False, showline=True, linewidth=1, linecolor="black", mirror=True)
     fig.update_yaxes(minor_showgrid=False, showline=True, linewidth=1, linecolor="black", mirror=True)
-
-    st.plotly_chart(fig, use_container_width=True)
+    
+    fig.layout.updatemenus[0].buttons[0].args[1]['frame']['duration'] = 1000  # 2 seconds per frame
+    fig.layout.updatemenus[0].buttons[0].args[1]['transition']['duration'] = 500 # 1 second smooth transition
+    st.plotly_chart(fig,width='stretch')
     
 
         
@@ -239,8 +235,8 @@ with tab2:
         with col2:
             st.subheader("Ерөнхий тойм")
             
+             #   - 2025 оны **1–12** дугаар саруудад нийт **{codegroup_map['LOYAL_CODES'].nunique()}** төрлийн урамшуулал олгогдсон байна.
             st.markdown(f"""
-                - 2025 оны **1–12** дугаар саруудад нийт **{df['LOYAL_CODE'].nunique()}** төрлийн урамшуулал олгогдсон байна.
                 - 2025 оны 4-р сард **54** төрлийн урамшуулал олгогдсон нь хамгийн олон төрлийн урамшуулал олгосон сар болсон байна.
                 - Графикийн баруун дээд хэсэгт дараах урамшууллууд тогтвортой байрлаж байна:
                     -   **1к эрхийн гүйлгээний**
@@ -260,20 +256,10 @@ with tab2:
             index=len(available_years) - 1
         )
         
-        df_year = df[df["year"] == selected_year]
-    
-        movers, movers_df = get_most_growing_loyal_code(df_year)
+        movers, movers_df = get_most_growing_loyal_code_from_monthly(movers_monthly, selected_year)
 
         current_movers_list = movers.tolist()
-
-        # 4. Filter visualization dataset
-        movers_df = (
-            transaction_summary[(
-                (transaction_summary["LOYAL_CODE"].isin(current_movers_list)) &
-                (transaction_summary['year'] == selected_year)
-            )]
-            .sort_values(["DESC", "year_month"])
-        )
+        movers_df = ( transaction_summary[( (transaction_summary["LOYAL_CODE"].isin(current_movers_list)) & (transaction_summary['year'] == selected_year) )] .sort_values(["DESC", "year_month"]) )
  
         fig = px.scatter(
             movers_df,
@@ -326,9 +312,9 @@ with tab2:
                 )
 
         st.subheader(f"Өндөр өсөлттэй урамшууллууд — {selected_year} он")
-        st.plotly_chart(fig,use_container_width=True)
+        st.plotly_chart(fig,width='stretch')
 
-        summary = movers_df.groupby("DESC").agg(
+        summary = movers_df.groupby("DESC",observed=True).agg(
             users_start=("Total_Users", "first"),
             users_end=("Total_Users", "last"),
             amount_start=("Total_Amount", "first"),
@@ -372,7 +358,7 @@ with tab2:
                 )
 
     with st.expander(expanded=False, label = 'Хүснэгт харах:'):
-        st.dataframe(transaction_summary, use_container_width=True)
+        st.dataframe(transaction_summary,width='stretch',hide_index=True)
 
 
 with tab3:
@@ -400,7 +386,7 @@ with tab3:
         hovertemplate="<b>%{fullData.name}</b><br>Month: %{x}<br>Total: %{y:,.0f}<extra></extra>"
     )
     
-    st.plotly_chart(line_chart_fig, use_container_width=True)
+    st.plotly_chart(line_chart_fig)
 
     with st.expander(expanded=True, label= 'Тайлбар:'):
 
@@ -432,12 +418,12 @@ with tab3:
             f'Percentage of Total Points by Transaction Group in {selected_month}'
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig,width='stretch')
 
 
     
     with st.expander("Хүснэгт харах:", expanded=False):
-        st.dataframe(monthly_grouped_reward, use_container_width=True)
+        st.dataframe(monthly_grouped_reward,width='stretch',hide_index=True)
 
 
 with tab4:
@@ -451,7 +437,7 @@ with tab4:
     ts_filtered = transaction_summary[transaction_summary['year'] == selected_year]
 
     # 4. Aggregate data for the Top 5 + Others logic
-    ts_agg = ts_filtered.groupby('LOYAL_CODE')['Total_Amount'].sum().reset_index()
+    ts_agg = ts_filtered.groupby('LOYAL_CODE',observed=True)['Total_Amount'].sum().reset_index()
 
     # Separate Top 5
     top5 = ts_agg.nlargest(5, columns='Total_Amount')
@@ -483,9 +469,9 @@ with tab4:
         margin=dict(t=80, b=20)
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig,width='stretch')
 
     
 
     with st.expander(expanded=False, label=('Хүснэгт харах:')):
-        st.dataframe(ts_final,use_container_width=True)
+        st.dataframe(ts_final,width='stretch',hide_index=True)
